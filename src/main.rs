@@ -16,26 +16,39 @@ fn main() -> Result<(), std::io::Error> {
     let source_file = &args[1];
 
     // Runs preprocessor
-    let preprocessor_file_name = "temp.i";
-    let status = Command::new("gcc")
+    let preprocessor_file_path = "./temp.i";
+    let preprocessor_status = Command::new("gcc")
         .arg("-E") // Run only preprocessor
         .arg("-P") // No linemarkers
         .arg(source_file)
         .arg("-o")
-        .arg(preprocess_file_name);
+        .arg(preprocessor_file_path)
+        .status()?;
+
+    if !preprocessor_status.success() {
+        return Err(Error::new(
+            ErrorKind::Other,
+            "Preprocessor failed at runtime.",
+        ));
+    }
 
     // Runs compiler (TODO)
-    let assembly_file = "temp.s";
-    fs::remove_file("./{}", preprocess_file_name);
+    let assembly_file_path = "./temp.s";
+    fs::remove_file(preprocessor_file_path)?;
 
     // Runs linker
     let output_file = source_file.strip_suffix(".c").unwrap_or(source_file);
-    let status = Command::new("gcc")
-        .arg(assembly_file);
+    let linker_status = Command::new("gcc")
+        .arg(assembly_file_path)
         .arg("-o")
-        .arg(preprocess_file_name);
-    
-    fs::remove_file("./{}", assembly_file);
+        .arg(output_file)
+        .status()?;
+
+    if !linker_status.success() {
+        return Err(Error::new(ErrorKind::Other, "Linking failed at runtime."));
+    }
+
+    fs::remove_file(assembly_file_path)?;
 
     Ok(())
 }
