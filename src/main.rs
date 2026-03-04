@@ -1,7 +1,10 @@
 use anyhow::{Result, bail};
 use clap::Parser;
+use std::fs;
 use std::process::Command;
 use tempfile::NamedTempFile;
+
+mod lexer;
 
 #[derive(Parser)]
 #[command(name = "crab")]
@@ -39,6 +42,9 @@ fn main() -> Result<()> {
     }
 
     // Runs compiler (TODO)
+    let content = fs::read_to_string(preprocessor_file_path)?;
+    crate::lexer::lexical_analysis(&content);
+
     let assembly_file = NamedTempFile::new()?;
     let assembly_file_path = assembly_file.path();
 
@@ -56,3 +62,5 @@ fn main() -> Result<()> {
 
     Ok(())
 }
+
+fn compile(content: &str, lex_flag: bool, parse_flag: bool, codegen_flag: bool) {}
