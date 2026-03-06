@@ -1,9 +1,9 @@
 use regex::Regex;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug)]
-pub enum TokenId {
-    Identifier,
-    Constant,
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
+pub enum Token {
+    Identifier(String),
+    Constant(i32),
     IntKeyword,
     VoidKeyword,
     ReturnKeyword,
@@ -14,26 +14,24 @@ pub enum TokenId {
     Semicolon,
 }
 
-#[derive(Debug)]
-pub struct Token {
-    id: TokenId,
-    value: Option<String>,
-}
-
 pub fn lexical_analysis(content: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
 
-    let rules = vec![
-        (TokenId::Identifier, Regex::new(r"^[a-zA-Z_]\w*\b").unwrap()),
-        (TokenId::Constant, Regex::new(r"^[0-9]+\b").unwrap()),
-        (TokenId::IntKeyword, Regex::new(r"^int\b").unwrap()),
-        (TokenId::VoidKeyword, Regex::new(r"^void\b").unwrap()),
-        (TokenId::ReturnKeyword, Regex::new(r"^return\b").unwrap()),
-        (TokenId::OpenParenthesis, Regex::new(r"^\(").unwrap()),
-        (TokenId::CloseParenthesis, Regex::new(r"^\)").unwrap()),
-        (TokenId::OpenBrace, Regex::new(r"^\{").unwrap()),
-        (TokenId::CloseBrace, Regex::new(r"^\}").unwrap()),
-        (TokenId::Semicolon, Regex::new(r"^;").unwrap()),
+    let rules: Vec<(Regex, fn(&str) -> Token)> = vec![
+        (Regex::new(r"^[a-zA-Z_]\w*\b").unwrap(), |s| {
+            Token::Identifier(s.to_string())
+        }),
+        (Regex::new(r"^[0-9]+\b").unwrap(), |s| {
+            Token::Constant(s.parse::<i32>().unwrap())
+        }),
+        (Regex::new(r"^int\b").unwrap(), |_| Token::IntKeyword),
+        (Regex::new(r"^void\b").unwrap(), |_| Token::VoidKeyword),
+        (Regex::new(r"^return\b").unwrap(), |_| Token::ReturnKeyword),
+        (Regex::new(r"^\(").unwrap(), |_| Token::OpenParenthesis),
+        (Regex::new(r"^\)").unwrap(), |_| Token::CloseParenthesis),
+        (Regex::new(r"^\{").unwrap(), |_| Token::OpenBrace),
+        (Regex::new(r"^\}").unwrap(), |_| Token::CloseBrace),
+        (Regex::new(r"^;").unwrap(), |_| Token::Semicolon),
     ];
 
     let mut i = 0;
@@ -45,34 +43,22 @@ pub fn lexical_analysis(content: &str) -> Vec<Token> {
             continue;
         }
 
+        // Find all token matches
         let mut token_matches = Vec::new();
-        for rule in &rules {
-            let rule_id = &rule.0;
-            let re = &rule.1;
-
-            // Find all token matches
+        for (re, constructor) in &rules {
             if let Some(m) = re.find(remaining_content) {
-                let token = (m.as_str(), rule_id);
-                token_matches.push(token);
+                let m_str = m.as_str();
+                token_matches.push((m_str, constructor(m_str)));
             }
         }
 
-        // Select the maximum token by lexicographic order
-        let max_match = *token_matches.iter().max().unwrap();
+        // Select the maximum token by lexicographic order (length and enum)
+        let max_match = token_matches.iter().max().unwrap();
 
         i += max_match.0.len();
 
-        let mut token = Token {
-            id: *max_match.1,
-            value: None,
-        };
-
-        if matches!(token.id, TokenId::Identifier | TokenId::Constant) {
-            token.value = Some(max_match.0.to_string());
-        }
-
-        println!("{:?}", token);
-        tokens.push(token);
+        println!("{:?}", max_match.1);
+        tokens.push(max_match.1.clone());
     }
 
     tokens
