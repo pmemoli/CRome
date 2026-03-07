@@ -3,5 +3,4 @@ C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". 
 Very much a WIP.
 
 TODO:
-- Make the lexer return Result<Vec<Token>> rather than just Vec<Token> to process lexical errors
-- Make the lexer work with exclusively an enum token. The rule vector should be of tuples (enum, generator function)
+- Make lexer and parser work with Result's rather than just panicking for errors.

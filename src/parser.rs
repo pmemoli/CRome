@@ -1,4 +1,5 @@
 use crate::lexer::Token;
+use std::collections::VecDeque;
 
 // ASDL Grammar
 // program = Program(function_definition)
@@ -14,26 +15,38 @@ use crate::lexer::Token;
 // <identifier> ::= ? An identifier token ?
 // <int> ::= ? A constant token ?
 
-struct Program(Function);
+#[derive(Debug)]
+pub struct Program(Function);
 
-struct Function(String, Statement);
+#[derive(Debug)]
+pub struct Function(String, Statement);
 
-enum Statement {
+#[derive(Debug)]
+pub enum Statement {
     Return(Expr),
 }
 
-enum Expr {
+#[derive(Debug)]
+pub enum Expr {
     Constant(i32),
 }
 
-fn expect(expected: Token, tokens: &mut Vec<Token>) {}
+fn expect(expected: Token, tokens: &mut VecDeque<Token>) {
+    let actual = tokens.pop_front().unwrap();
+    if actual != expected {
+        panic!(
+            "Syntax Error: Expected {:?} but found {:?}",
+            expected, actual
+        );
+    }
+}
 
-fn parse_program(tokens: &mut Vec<Token>) -> Program {
+pub fn parse_program(tokens: &mut VecDeque<Token>) -> Program {
     let function = parse_function(tokens);
     Program(function)
 }
 
-fn parse_function(tokens: &mut Vec<Token>) -> Function {
+pub fn parse_function(tokens: &mut VecDeque<Token>) -> Function {
     expect(Token::IntKeyword, tokens);
     let identifier = parse_identifier(tokens);
     expect(Token::OpenParenthesis, tokens);
@@ -46,7 +59,7 @@ fn parse_function(tokens: &mut Vec<Token>) -> Function {
     Function(identifier, statement)
 }
 
-fn parse_statement(tokens: &mut Vec<Token>) -> Statement {
+pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
     expect(Token::ReturnKeyword, tokens);
     let expr = parse_expr(tokens);
     expect(Token::Semicolon, tokens);
@@ -54,11 +67,25 @@ fn parse_statement(tokens: &mut Vec<Token>) -> Statement {
     Statement::Return(expr)
 }
 
-fn parse_expr(tokens: &mut Vec<Token>) -> Expr {
+pub fn parse_expr(tokens: &mut VecDeque<Token>) -> Expr {
     let int = parse_int(tokens);
     Expr::Constant(int)
 }
 
-fn parse_identifier(tokens: &mut Vec<Token>) -> String {}
+pub fn parse_identifier(tokens: &mut VecDeque<Token>) -> String {
+    let actual = tokens.pop_front().unwrap();
+    let Token::Identifier(s) = actual else {
+        panic!("Syntax Error: Can't parse {:?} as a string", actual);
+    };
 
-fn parse_int(tokens: &mut Vec<Token>) -> i32 {}
+    s.to_string()
+}
+
+pub fn parse_int(tokens: &mut VecDeque<Token>) -> i32 {
+    let actual = tokens.pop_front().unwrap();
+    let Token::Constant(s) = actual else {
+        panic!("Syntax Error: Can't parse {:?} as an integer", actual);
+    };
+
+    s
+}

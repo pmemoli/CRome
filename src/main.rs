@@ -65,5 +65,7 @@ fn main() -> Result<()> {
 }
 
 fn compile(content: &str, lex_flag: bool, parse_flag: bool, codegen_flag: bool) {
-    crate::lexer::lexical_analysis(&content);
+    let mut tokens = crate::lexer::lexical_analysis(&content);
+    let ast = crate::parser::parse_program(&mut tokens);
+    println!("{:#?}", ast);
 }

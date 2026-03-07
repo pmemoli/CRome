@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::collections::VecDeque;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
 pub enum Token {
@@ -14,8 +15,8 @@ pub enum Token {
     Semicolon,
 }
 
-pub fn lexical_analysis(content: &str) -> Vec<Token> {
-    let mut tokens = Vec::new();
+pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
+    let mut tokens = VecDeque::new();
 
     let rules: Vec<(Regex, fn(&str) -> Token)> = vec![
         (Regex::new(r"^[a-zA-Z_]\w*\b").unwrap(), |s| {
@@ -57,8 +58,7 @@ pub fn lexical_analysis(content: &str) -> Vec<Token> {
 
         i += max_match.0.len();
 
-        println!("{:?}", max_match.1);
-        tokens.push(max_match.1.clone());
+        tokens.push_back(max_match.1.clone());
     }
 
     tokens
