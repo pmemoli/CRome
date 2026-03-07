@@ -1,0 +1,3 @@
+#!/bin/sh
+
+./tests/test_compiler ./target/debug/crab --chapter 1 --stage codegen

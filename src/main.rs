@@ -4,6 +4,7 @@ use std::fs;
 use std::process::Command;
 use tempfile::NamedTempFile;
 
+mod codegen;
 mod lexer;
 mod parser;
 

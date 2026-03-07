@@ -43,6 +43,11 @@ fn expect(expected: Token, tokens: &mut VecDeque<Token>) {
 
 pub fn parse_program(tokens: &mut VecDeque<Token>) -> Program {
     let function = parse_function(tokens);
+
+    if tokens.len() != 0 {
+        panic!("Syntax Error: Parsed entire program but some tokens remain");
+    }
+
     Program(function)
 }
 
