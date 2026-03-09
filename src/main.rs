@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use clap::Parser;
 use std::fs;
 use std::process::Command;
-use tempfile::NamedTempFile;
+use tempfile::{Builder, NamedTempFile};
 
 mod codegen;
 mod emission;
@@ -46,44 +46,43 @@ fn main() -> Result<()> {
 
     // Runs compiler
     let content = fs::read_to_string(preprocessor_file_path)?;
-    compile(&content, args.lex, args.parse, args.codegen);
 
-    // let assembly_file = NamedTempFile::new()?;
-    // let assembly_file_path = assembly_file.path();
-    //
-    // // Runs linker
-    // let output_file = source_file.strip_suffix(".c").unwrap_or(source_file);
-    // let linker_status = Command::new("gcc")
-    //     .arg(assembly_file_path)
-    //     .arg("-o")
-    //     .arg(output_file)
-    //     .status()?;
-    //
-    // if !linker_status.success() {
-    //     bail!("Linking failed at runtime.");
-    // }
-
-    Ok(())
-}
-
-fn compile(content: &str, lex_flag: bool, parse_flag: bool, codegen_flag: bool) {
     let mut tokens = crate::lexer::lexical_analysis(&content);
 
-    if lex_flag {
-        return;
+    if args.lex {
+        return Ok(());
     }
 
     let ast = crate::parser::parse_program(&mut tokens);
 
-    if parse_flag {
-        return;
+    if args.parse {
+        return Ok(());
     }
 
     let asm_ast = crate::codegen::codegen_program(&ast);
 
-    if codegen_flag {
-        return;
+    if args.codegen {
+        return Ok(());
     }
 
-    println!("{:#?}", asm_ast);
+    let asm_str = crate::emission::emission_program(&asm_ast);
+
+    let assembly_file = Builder::new().suffix(".s").tempfile()?;
+    let assembly_file_path = assembly_file.path();
+
+    fs::write(assembly_file_path, asm_str)?;
+
+    // Runs linker
+    let output_file = source_file.strip_suffix(".c").unwrap_or(source_file);
+    let linker_status = Command::new("gcc")
+        .arg(assembly_file_path)
+        .arg("-o")
+        .arg(output_file)
+        .status()?;
+
+    if !linker_status.success() {
+        bail!("Linking failed at runtime.");
+    }
+
+    Ok(())
 }
