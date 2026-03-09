@@ -5,6 +5,7 @@ use std::process::Command;
 use tempfile::NamedTempFile;
 
 mod codegen;
+mod emission;
 mod lexer;
 mod parser;
 
@@ -67,6 +68,22 @@ fn main() -> Result<()> {
 
 fn compile(content: &str, lex_flag: bool, parse_flag: bool, codegen_flag: bool) {
     let mut tokens = crate::lexer::lexical_analysis(&content);
+
+    if lex_flag {
+        return;
+    }
+
     let ast = crate::parser::parse_program(&mut tokens);
-    println!("{:#?}", ast);
+
+    if parse_flag {
+        return;
+    }
+
+    let asm_ast = crate::codegen::codegen_program(&ast);
+
+    if codegen_flag {
+        return;
+    }
+
+    println!("{:#?}", asm_ast);
 }

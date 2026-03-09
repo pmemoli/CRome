@@ -1,5 +1,5 @@
+test.c
 Cargo.lock
-c/
 build/
 target/
 tests/

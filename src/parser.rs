@@ -1,7 +1,7 @@
 use crate::lexer::Token;
 use std::collections::VecDeque;
 
-// ASDL Grammar
+// AST Specification
 // program = Program(function_definition)
 // function_definition = Function(identifier name, statement body)
 // statement = Return(exp)
@@ -16,10 +16,10 @@ use std::collections::VecDeque;
 // <int> ::= ? A constant token ?
 
 #[derive(Debug)]
-pub struct Program(Function);
+pub struct Program(pub Function);
 
 #[derive(Debug)]
-pub struct Function(String, Statement);
+pub struct Function(pub String, pub Statement);
 
 #[derive(Debug)]
 pub enum Statement {
