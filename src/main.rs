@@ -54,6 +54,7 @@ fn main() -> Result<()> {
     }
 
     let ast = crate::parser::parse_program(&mut tokens);
+    println!("{:#?}", ast);
 
     if args.parse {
         return Ok(());

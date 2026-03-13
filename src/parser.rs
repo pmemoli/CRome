@@ -1,45 +1,35 @@
 use crate::lexer::Token;
 use std::collections::VecDeque;
 
-// AST Specification
 // program = Program(function_definition)
-// function_definition = Function(identifier name, statement body)
-// statement = Return(exp)
-// exp = Constant(int) | Unary(unary_operator, exp)
-// unary_operator = Complement | Negate
-
-// Formal Grammar
-// <program> ::= <function>
-// <function> ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
-// <statement> ::= "return" <exp> ";"
-// <exp> ::= <int> | <unop> <exp> | "(" <exp> ")"
-// <unop> ::= "-" | "~"
-// <identifier> ::= ? An identifier token ?
-// <int> ::= ? A constant token ?
-
 #[derive(Debug)]
 pub struct Program(pub Function);
 
+// function_definition = Function(identifier name, statement body)
 #[derive(Debug)]
 pub struct Function(pub String, pub Statement);
 
+// statement = Return(exp)
 #[derive(Debug)]
 pub enum Statement {
     Return(Expr),
 }
 
+// exp = Constant(int) | Unary(unary_operator, exp)
 #[derive(Debug)]
 pub enum Expr {
     Constant(i32),
     Unary(UnaryOperator, Box<Expr>),
 }
 
+// unary_operator = Complement | Negate
 #[derive(Debug)]
 pub enum UnaryOperator {
     Complement,
     Negate,
 }
 
+// utils
 fn expect(expected: Token, tokens: &mut VecDeque<Token>) {
     let actual = tokens.pop_front().unwrap();
     if actual != expected {
@@ -50,6 +40,15 @@ fn expect(expected: Token, tokens: &mut VecDeque<Token>) {
     }
 }
 
+fn peek(tokens: &VecDeque<Token>) -> &Token {
+    tokens.front().unwrap()
+}
+
+fn take_token(tokens: &mut VecDeque<Token>) -> Token {
+    tokens.pop_front().unwrap()
+}
+
+// <program> ::= <function>
 pub fn parse_program(tokens: &mut VecDeque<Token>) -> Program {
     let function = parse_function(tokens);
 
@@ -60,6 +59,7 @@ pub fn parse_program(tokens: &mut VecDeque<Token>) -> Program {
     Program(function)
 }
 
+// <function> ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
 pub fn parse_function(tokens: &mut VecDeque<Token>) -> Function {
     expect(Token::IntKeyword, tokens);
     let identifier = parse_identifier(tokens);
@@ -73,6 +73,7 @@ pub fn parse_function(tokens: &mut VecDeque<Token>) -> Function {
     Function(identifier, statement)
 }
 
+// <statement> ::= "return" <exp> ";"
 pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
     expect(Token::ReturnKeyword, tokens);
     let expr = parse_expr(tokens);
@@ -81,11 +82,45 @@ pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
     Statement::Return(expr)
 }
 
+// <exp> ::= <int> | <unop> <exp> | "(" <exp> ")"
 pub fn parse_expr(tokens: &mut VecDeque<Token>) -> Expr {
-    let int = parse_int(tokens);
-    Expr::Constant(int)
+    match peek(tokens) {
+        Token::Constant(i) => {
+            let expr = Expr::Constant(*i);
+            take_token(tokens);
+            expr
+        }
+        Token::Hyphen | Token::Tilde => {
+            let operator = parse_unop(tokens);
+            let inner_expr = parse_expr(tokens);
+            Expr::Unary(operator, Box::new(inner_expr))
+        }
+        Token::OpenParenthesis => {
+            take_token(tokens);
+            let inner_expr = parse_expr(tokens);
+            expect(Token::CloseParenthesis, tokens);
+            inner_expr
+        }
+        _ => panic!("Malformed Expression"),
+    }
 }
 
+// <unop> ::= "-" | "~"
+pub fn parse_unop(tokens: &mut VecDeque<Token>) -> UnaryOperator {
+    match peek(tokens) {
+        Token::Hyphen => {
+            take_token(tokens);
+            UnaryOperator::Negate
+        }
+        Token::Tilde => {
+            take_token(tokens);
+            UnaryOperator::Complement
+        }
+        _ => panic!("Malformed Expression"),
+    }
+}
+
+// <identifier> ::= ? An identifier token ?
 pub fn parse_identifier(tokens: &mut VecDeque<Token>) -> String {
     let actual = tokens.pop_front().unwrap();
     let Token::Identifier(s) = actual else {
@@ -95,11 +130,12 @@ pub fn parse_identifier(tokens: &mut VecDeque<Token>) -> String {
     s.to_string()
 }
 
-pub fn parse_int(tokens: &mut VecDeque<Token>) -> i32 {
-    let actual = tokens.pop_front().unwrap();
-    let Token::Constant(s) = actual else {
-        panic!("Syntax Error: Can't parse {:?} as an integer", actual);
-    };
-
-    s
-}
+// <int> ::= ? A constant token ? (a separate function is currently not needed...)
+// pub fn parse_int(tokens: &mut VecDeque<Token>) -> i32 {
+//     let actual = tokens.pop_front().unwrap();
+//     let Token::Constant(s) = actual else {
+//         panic!("Syntax Error: Can't parse {:?} as an integer", actual);
+//     };
+//
+//     s
+// }

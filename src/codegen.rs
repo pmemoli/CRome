@@ -47,12 +47,12 @@ pub fn codegen_statement(ast_statement: &parser::Statement) -> Vec<Instruction> 
             instructions.push(Instruction::Ret);
         }
     }
-
     instructions
 }
 
 pub fn codegen_expression(ast_expression: &parser::Expr) -> Operand {
     match ast_expression {
         parser::Expr::Constant(i) => Operand::Imm(*i),
+        _ => panic!("Malformed Expression"),
     }
 }
