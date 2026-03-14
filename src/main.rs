@@ -8,6 +8,7 @@ mod codegen;
 mod emission;
 mod lexer;
 mod parser;
+mod tacky;
 
 #[derive(Parser)]
 #[command(name = "crab")]
@@ -17,6 +18,9 @@ struct Args {
 
     #[arg(long)]
     lex: bool,
+
+    #[arg(long)]
+    tacky: bool,
 
     #[arg(long)]
     parse: bool,
@@ -57,6 +61,12 @@ fn main() -> Result<()> {
     println!("{:#?}", ast);
 
     if args.parse {
+        return Ok(());
+    }
+
+    // tacky generation
+
+    if args.tacky {
         return Ok(());
     }
 
