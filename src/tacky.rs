@@ -2,11 +2,11 @@ use crate::parser;
 
 // program = Program(function_definition)
 #[derive(Debug)]
-pub struct Program(Function);
+pub struct Program(pub Function);
 
 // function_definition = Function(identifier, instruction* body)
 #[derive(Debug)]
-pub struct Function(String, Vec<Instruction>);
+pub struct Function(pub String, pub Vec<Instruction>);
 
 // instruction = Return(val) | Unary(unary_operator, val src, val dst)
 #[derive(Debug)]
