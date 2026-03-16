@@ -1,4 +1,5 @@
 use crate::tacky;
+use std::collections::HashMap;
 
 // program = Program(function_definition)
 #[derive(Debug)]
@@ -12,7 +13,7 @@ pub struct Function(pub String, pub Vec<Instruction>);
 // | Unary(unary_operator, operand)
 // | AllocateStack(int)
 // | Ret
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Instruction {
     Mov(Operand, Operand),
     Unary(UnaryOperator, Operand),
@@ -21,7 +22,7 @@ pub enum Instruction {
 }
 
 // unary_operator = Neg | Not
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UnaryOperator {
     Neg,
     Not,
@@ -63,25 +64,23 @@ pub fn tacky_function_to_asm(tacky_function: &tacky::Function) -> Function {
 }
 
 pub fn tacky_instruction_to_asm(tacky_function: &tacky::Instruction) -> Vec<Instruction> {
-    let mut tacky_instructions = Vec::new();
     match tacky_function {
         tacky::Instruction::Return(val) => {
             let src_asm_op = tacky_val_to_asm(val);
             let dst_asm_op = Operand::Reg(Reg::AX);
-            tacky_instructions.push(Instruction::Mov(src_asm_op, dst_asm_op));
-            tacky_instructions.push(Instruction::Ret);
+            vec![Instruction::Mov(src_asm_op, dst_asm_op), Instruction::Ret]
         }
 
         tacky::Instruction::Unary(unop, src, dst) => {
             let unop_asm_op = tacky_unop_to_asm(unop);
             let src_asm_op = tacky_val_to_asm(src);
             let dst_asm_op = tacky_val_to_asm(dst);
-            tacky_instructions.push(Instruction::Mov(src_asm_op, dst_asm_op.clone()));
-            tacky_instructions.push(Instruction::Unary(unop_asm_op, dst_asm_op));
+            vec![
+                Instruction::Mov(src_asm_op, dst_asm_op.clone()),
+                Instruction::Unary(unop_asm_op, dst_asm_op),
+            ]
         }
     }
-
-    tacky_instructions
 }
 
 pub fn tacky_val_to_asm(tacky_function: &tacky::Val) -> Operand {
@@ -99,22 +98,98 @@ pub fn tacky_unop_to_asm(tacky_unop: &tacky::UnaryOperator) -> UnaryOperator {
 }
 
 // Second pass: Replace Pseudo(identifier) with Stack(int)
-pub fn resolve_pseudo_registers_program(program: &Program) -> Program {
+pub fn resolve_pseudo_registers_program(program: &Program) -> (Program, i32) {
+    // Returns the resolved program and the total stack size needed for temp variables.
+
     let Program(function) = program;
-    let resolved_function = resolve_pseudo_registers_function(function);
-    Program(resolved_function)
+
+    let mut identifier_map = HashMap::new();
+
+    let resolved_function = resolve_pseudo_registers_function(function, &mut identifier_map);
+    (
+        Program(resolved_function),
+        (identifier_map.len() as i32) * 4,
+    )
 }
 
-pub fn resolve_pseudo_registers_function(function: &Function) -> Function {
+pub fn resolve_pseudo_registers_function(
+    function: &Function,
+    identifier_map: &mut HashMap<String, i32>,
+) -> Function {
     let Function(identifier, instructions) = function;
+
     let resolved_instructions = instructions
         .into_iter()
-        .flat_map(resolve_pseudo_registers_instruction)
+        .flat_map(|i| resolve_pseudo_registers_instruction(i, identifier_map))
         .collect();
 
     Function(identifier.clone(), resolved_instructions)
 }
 
-pub fn resolve_pseudo_registers_instruction(instruction: &Instruction) -> Vec<Instruction> {}
+pub fn resolve_pseudo_registers_instruction(
+    instruction: &Instruction,
+    identifier_map: &mut HashMap<String, i32>,
+) -> Vec<Instruction> {
+    match instruction {
+        Instruction::Mov(src, dst) => {
+            let resolved_src = resolve_pseudo_registers_operand(src, identifier_map);
+            let resolved_dst = resolve_pseudo_registers_operand(dst, identifier_map);
+            vec![Instruction::Mov(resolved_src, resolved_dst)]
+        }
+        Instruction::Unary(unop, op) => {
+            let resolved_op = resolve_pseudo_registers_operand(op, identifier_map);
+            vec![Instruction::Unary(unop.clone(), resolved_op)]
+        }
+        i => vec![i.clone()],
+    }
+}
 
-pub fn resolve_pseudo_registers_operand(operand: &Operand) -> Operand {}
+pub fn resolve_pseudo_registers_operand(
+    operand: &Operand,
+    identifier_map: &mut HashMap<String, i32>,
+) -> Operand {
+    match operand {
+        Operand::Pseudo(s) => match identifier_map.get(s) {
+            Some(i) => Operand::Stack(*i),
+            None => {
+                // Each temp variable (only primitive value is i32) gets assigned 4 bytes.
+                let new_stack_offset = -((identifier_map.len() + 1) as i32 * 4);
+                identifier_map.insert(s.clone(), new_stack_offset);
+                Operand::Stack(new_stack_offset)
+            }
+        },
+        o => o.clone(),
+    }
+}
+
+// Third pass: Allocate stack and fix instruction operands
+pub fn allocate_stack_program(program: &Program, stack_size: i32) -> Program {
+    let Program(function) = program;
+
+    let allocated_function = allocate_stack_function(function, stack_size);
+    Program(allocated_function)
+}
+
+pub fn allocate_stack_function(function: &Function, stack_size: i32) -> Function {
+    let Function(identifier, instructions) = function;
+
+    let mut allocated_instructions = vec![Instruction::AllocateStack(stack_size)];
+    let fixed_instructions = instructions
+        .into_iter()
+        .flat_map(allocate_stack_instruction);
+    allocated_instructions.extend(fixed_instructions);
+
+    Function(identifier.clone(), allocated_instructions)
+}
+
+pub fn allocate_stack_instruction(instruction: &Instruction) -> Vec<Instruction> {
+    match instruction {
+        Instruction::Mov(op_a @ Operand::Stack(_), op_b @ Operand::Stack(_)) => {
+            vec![
+                Instruction::Mov(op_a.clone(), Operand::Reg(Reg::R10)),
+                Instruction::Mov(Operand::Reg(Reg::R10), op_b.clone()),
+            ]
+        }
+        i => vec![i.clone()],
+    }
+}

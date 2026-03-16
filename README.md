@@ -3,7 +3,12 @@ C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". 
 Very much a WIP.
 
 TODO:
+- Abstract the three asm passes into one.
+- Mutate the asm ast rather than create new ones for each pass.
 - Write the tacky to asm codegen
+
+Backlog:
+- Potentially flatten some tacky to asm passes into one function rather than a gazillion.
 - Make lexer and parser work with Result's rather than just panicking for errors.
 
 # Compiler passes

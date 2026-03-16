@@ -69,9 +69,13 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let asm_ast = crate::codegen::tacky_program_to_asm(&tacky_ast);
+    let asm_ast_fp = crate::codegen::tacky_program_to_asm(&tacky_ast);
+    let (asm_ast_sp, stack_size) = crate::codegen::resolve_pseudo_registers_program(&asm_ast_fp);
+    let asm_ast_tp = crate::codegen::allocate_stack_program(&asm_ast_sp, stack_size);
 
-    print!("{:#?}", asm_ast);
+    print!("{:#?}", asm_ast_fp);
+    print!("{:#?}", asm_ast_sp);
+    print!("{:#?}", asm_ast_tp);
 
     // if args.codegen {
     //     return Ok(());
