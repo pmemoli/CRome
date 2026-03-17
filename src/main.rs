@@ -5,7 +5,7 @@ use std::process::Command;
 use tempfile::{Builder, NamedTempFile};
 
 mod codegen;
-// mod emission;
+mod emission;
 mod lexer;
 mod parser;
 mod tacky;
@@ -69,36 +69,32 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let asm_ast_fp = crate::codegen::tacky_program_to_asm(&tacky_ast);
-    let (asm_ast_sp, stack_size) = crate::codegen::resolve_pseudo_registers_program(&asm_ast_fp);
-    let asm_ast_tp = crate::codegen::allocate_stack_program(&asm_ast_sp, stack_size);
+    let asm_ast = crate::codegen::codegen_program(&tacky_ast);
 
-    print!("{:#?}", asm_ast_fp);
-    print!("{:#?}", asm_ast_sp);
-    print!("{:#?}", asm_ast_tp);
+    if args.codegen {
+        return Ok(());
+    }
 
-    // if args.codegen {
-    //     return Ok(());
-    // }
-    //
-    // let asm_str = crate::emission::emission_program(&asm_ast);
-    //
-    // let assembly_file = Builder::new().suffix(".s").tempfile()?;
-    // let assembly_file_path = assembly_file.path();
-    //
-    // fs::write(assembly_file_path, asm_str)?;
-    //
-    // // Runs linker
-    // let output_file = source_file.strip_suffix(".c").unwrap_or(source_file);
-    // let linker_status = Command::new("gcc")
-    //     .arg(assembly_file_path)
-    //     .arg("-o")
-    //     .arg(output_file)
-    //     .status()?;
-    //
-    // if !linker_status.success() {
-    //     bail!("Linking failed at runtime.");
-    // }
+    let asm_str = crate::emission::emission_program(&asm_ast);
+
+    print!("\n{}", asm_str);
+
+    let assembly_file = Builder::new().suffix(".s").tempfile()?;
+    let assembly_file_path = assembly_file.path();
+
+    fs::write(assembly_file_path, asm_str)?;
+
+    // Runs linker
+    let output_file = source_file.strip_suffix(".c").unwrap_or(source_file);
+    let linker_status = Command::new("gcc")
+        .arg(assembly_file_path)
+        .arg("-o")
+        .arg(output_file)
+        .status()?;
+
+    if !linker_status.success() {
+        bail!("Linking failed at runtime.");
+    }
 
     Ok(())
 }
