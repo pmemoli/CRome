@@ -43,8 +43,8 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
         (Regex::new(r"^~").unwrap(), |_| Token::Tilde),
         (Regex::new(r"^-").unwrap(), |_| Token::Hyphen),
         (Regex::new(r"^--").unwrap(), |_| Token::TwoHyphens),
-        (Regex::new(r"^+").unwrap(), |_| Token::Plus),
-        (Regex::new(r"^*").unwrap(), |_| Token::Asterisk),
+        (Regex::new(r"^\+").unwrap(), |_| Token::Plus),
+        (Regex::new(r"^\*").unwrap(), |_| Token::Asterisk),
         (Regex::new(r"^/").unwrap(), |_| Token::ForwardSlash),
         (Regex::new(r"^%").unwrap(), |_| Token::Percent),
     ];
