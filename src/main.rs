@@ -5,7 +5,7 @@ use std::process::Command;
 use tempfile::{Builder, NamedTempFile};
 
 mod codegen;
-mod emission;
+// mod emission;
 mod lexer;
 mod parser;
 mod tacky;
@@ -71,30 +71,32 @@ fn main() -> Result<()> {
 
     let asm_ast = crate::codegen::codegen_program(&tacky_ast);
 
+    println!("\n{:#?}", asm_ast);
+
     if args.codegen {
         return Ok(());
     }
 
-    let asm_str = crate::emission::emission_program(&asm_ast);
-
-    print!("\n{}", asm_str);
-
-    let assembly_file = Builder::new().suffix(".s").tempfile()?;
-    let assembly_file_path = assembly_file.path();
-
-    fs::write(assembly_file_path, asm_str)?;
-
-    // Runs linker
-    let output_file = source_file.strip_suffix(".c").unwrap_or(source_file);
-    let linker_status = Command::new("gcc")
-        .arg(assembly_file_path)
-        .arg("-o")
-        .arg(output_file)
-        .status()?;
-
-    if !linker_status.success() {
-        bail!("Linking failed at runtime.");
-    }
+    // let asm_str = crate::emission::emission_program(&asm_ast);
+    //
+    // print!("\n{}", asm_str);
+    //
+    // let assembly_file = Builder::new().suffix(".s").tempfile()?;
+    // let assembly_file_path = assembly_file.path();
+    //
+    // fs::write(assembly_file_path, asm_str)?;
+    //
+    // // Runs linker
+    // let output_file = source_file.strip_suffix(".c").unwrap_or(source_file);
+    // let linker_status = Command::new("gcc")
+    //     .arg(assembly_file_path)
+    //     .arg("-o")
+    //     .arg(output_file)
+    //     .status()?;
+    //
+    // if !linker_status.success() {
+    //     bail!("Linking failed at runtime.");
+    // }
 
     Ok(())
 }

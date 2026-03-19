@@ -3,7 +3,7 @@ C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". 
 Very much a WIP.
 
 TODO:
-- Start chapter 3!
+- Clean the assembly generation first step code.
 
 Backlog:
 - Potentially flatten some tacky to asm passes into one function rather than a gazillion.
@@ -18,8 +18,11 @@ Backlog:
 program = Program(function_definition)
 function_definition = Function(identifier name, statement body)
 statement = Return(exp)
-exp = Constant(int) | Unary(unary_operator, exp)
+exp = Constant(int)
+    | Unary(unary_operator, exp)
+    | Binary(binary_operator, exp, exp)
 unary_operator = Complement | Negate
+binary_operator = Add | Subtract | Multiply | Divide | Remainder
 ```
 
 ## Formal Grammar
@@ -27,8 +30,10 @@ unary_operator = Complement | Negate
 <program> ::= <function>
 <function> ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
 <statement> ::= "return" <exp> ";"
-<exp> ::= <int> | <unop> <exp> | "(" <exp> ")"
+<exp> ::= <factor> | <exp> <binop> <exp>
+<factor> ::= <int> | <unop> <factor> | "(" <exp> ")"
 <unop> ::= "-" | "~"
+<binop> ::= "-" | "+" | "*" | "/" | "%"
 <identifier> ::= ? An identifier token ?
 <int> ::= ? A constant token ?
 ```
@@ -37,9 +42,12 @@ unary_operator = Complement | Negate
 ```
 program = Program(function_definition)
 function_definition = Function(identifier, instruction* body)
-instruction = Return(val) | Unary(unary_operator, val src, val dst)
+instruction = Return(val)
+    | Unary(unary_operator, val src, val dst)
+    | Binary(binary_operator, val src1, val src2, val dst)
 val = Constant(int) | Var(identifier)
 unary_operator = Complement | Negate
+binary_operator = Add | Subtract | Multiply | Divide | Remainder
 ```
 
 ## ASM Grammar
@@ -48,11 +56,15 @@ program = Program(function_definition)
 function_definition = Function(identifier name, instruction* instructions)
 instruction = Mov(operand src, operand dst)
 | Unary(unary_operator, operand)
+| Binary(binary_operator, operand, operand)
+| Idiv(operand)
+| Cdq
 | AllocateStack(int)
 | Ret
 unary_operator = Neg | Not
+binary_operator = Add | Sub | Mult
 operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int)
-reg = AX | R10
+reg = AX | DX | R10 | R11
 ```
 
 3 passes: 

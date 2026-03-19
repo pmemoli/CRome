@@ -11,12 +11,18 @@ pub struct Function(pub String, pub Vec<Instruction>);
 
 // instruction = Mov(operand src, operand dst)
 // | Unary(unary_operator, operand)
+// | Binary(binary_operator, operand, operand)
+// | Idiv(operand)
+// | Cdq
 // | AllocateStack(int)
 // | Ret
 #[derive(Debug, Clone)]
 pub enum Instruction {
     Mov(Operand, Operand),
     Unary(UnaryOperator, Operand),
+    Binary(BinaryOperator, Operand, Operand),
+    Idiv(Operand),
+    Cdq,
     AllocateStack(i32),
     Ret,
 }
@@ -28,6 +34,14 @@ pub enum UnaryOperator {
     Not,
 }
 
+// binary_operator = Add | Sub | Mult
+#[derive(Debug, Clone)]
+pub enum BinaryOperator {
+    Add,
+    Sub,
+    Mult,
+}
+
 // operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int)
 #[derive(Debug, Clone)]
 pub enum Operand {
@@ -37,11 +51,13 @@ pub enum Operand {
     Stack(i32),
 }
 
-// reg = AX | R10
+// reg = AX | DX | R10 | R11
 #[derive(Debug, Clone)]
 pub enum Reg {
     AX,
+    DX,
     R10,
+    R11,
 }
 
 // First pass: Convert Tacky to ASM AST (with temp variables as pseudoregisters)
@@ -63,6 +79,7 @@ pub fn tacky_function_to_asm(tacky_function: &tacky::Function) -> Function {
     Function(identifier, asm_instructions)
 }
 
+// Could be cleaned a LOT
 pub fn tacky_instruction_to_asm(tacky_function: &tacky::Instruction) -> Vec<Instruction> {
     match tacky_function {
         tacky::Instruction::Return(val) => {
@@ -80,6 +97,45 @@ pub fn tacky_instruction_to_asm(tacky_function: &tacky::Instruction) -> Vec<Inst
                 Instruction::Unary(unop_asm_op, dst_asm_op),
             ]
         }
+        tacky::Instruction::Binary(
+            binop @ tacky::BinaryOperator::Add
+            | binop @ tacky::BinaryOperator::Subtract
+            | binop @ tacky::BinaryOperator::Multiply,
+            src_a,
+            src_b,
+            dst,
+        ) => {
+            let binop_asm_op = tacky_binop_to_asm(binop);
+            let src_a_asm_op = tacky_val_to_asm(src_a);
+            let src_b_asm_op = tacky_val_to_asm(src_b);
+            let dst_asm_op = tacky_val_to_asm(dst);
+            vec![
+                Instruction::Mov(src_a_asm_op, dst_asm_op.clone()),
+                Instruction::Binary(binop_asm_op, src_b_asm_op, dst_asm_op),
+            ]
+        }
+        tacky::Instruction::Binary(tacky::BinaryOperator::Divide, src_a, src_b, dst) => {
+            let src_a_asm_op = tacky_val_to_asm(src_a);
+            let src_b_asm_op = tacky_val_to_asm(src_b);
+            let dst_asm_op = tacky_val_to_asm(dst);
+            vec![
+                Instruction::Mov(src_a_asm_op, Operand::Reg(Reg::AX)),
+                Instruction::Cdq,
+                Instruction::Idiv(src_b_asm_op),
+                Instruction::Mov(Operand::Reg(Reg::AX), dst_asm_op),
+            ]
+        }
+        tacky::Instruction::Binary(tacky::BinaryOperator::Remainder, src_a, src_b, dst) => {
+            let src_a_asm_op = tacky_val_to_asm(src_a);
+            let src_b_asm_op = tacky_val_to_asm(src_b);
+            let dst_asm_op = tacky_val_to_asm(dst);
+            vec![
+                Instruction::Mov(src_a_asm_op, Operand::Reg(Reg::AX)),
+                Instruction::Cdq,
+                Instruction::Idiv(src_b_asm_op),
+                Instruction::Mov(Operand::Reg(Reg::DX), dst_asm_op),
+            ]
+        }
     }
 }
 
@@ -94,6 +150,15 @@ pub fn tacky_unop_to_asm(tacky_unop: &tacky::UnaryOperator) -> UnaryOperator {
     match tacky_unop {
         tacky::UnaryOperator::Complement => UnaryOperator::Not,
         tacky::UnaryOperator::Negate => UnaryOperator::Neg,
+    }
+}
+
+pub fn tacky_binop_to_asm(tacky_binop: &tacky::BinaryOperator) -> BinaryOperator {
+    match tacky_binop {
+        tacky::BinaryOperator::Add => BinaryOperator::Add,
+        tacky::BinaryOperator::Subtract => BinaryOperator::Sub,
+        tacky::BinaryOperator::Multiply => BinaryOperator::Mult,
+        _ => panic!("Unsupported binary operator in codegen"),
     }
 }
 

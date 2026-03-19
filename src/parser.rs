@@ -15,11 +15,14 @@ pub enum Statement {
     Return(Expr),
 }
 
-// exp = Constant(int) | Unary(unary_operator, exp)
+// exp = Constant(int)
+//     | Unary(unary_operator, exp)
+//     | Binary(binary_operator, exp, exp)
 #[derive(Debug)]
 pub enum Expr {
     Constant(i32),
     Unary(UnaryOperator, Box<Expr>),
+    Binary(BinaryOperator, Box<Expr>, Box<Expr>),
 }
 
 // unary_operator = Complement | Negate
@@ -27,6 +30,16 @@ pub enum Expr {
 pub enum UnaryOperator {
     Complement,
     Negate,
+}
+
+// binary_operator = Add | Subtract | Multiply | Divide | Remainder
+#[derive(Debug)]
+pub enum BinaryOperator {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Remainder,
 }
 
 // utils
@@ -46,6 +59,24 @@ fn peek(tokens: &VecDeque<Token>) -> &Token {
 
 fn take_token(tokens: &mut VecDeque<Token>) -> Token {
     tokens.pop_front().unwrap()
+}
+
+fn precedence(operator: &Token) -> i32 {
+    match operator {
+        Token::Plus | Token::Hyphen => 45,
+        Token::Asterisk | Token::ForwardSlash | Token::Percent => 50,
+        _ => panic!(
+            "Syntax Error: Expected a binary operator but found {:?}",
+            operator
+        ),
+    }
+}
+
+fn is_binop(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Plus | Token::Hyphen | Token::Asterisk | Token::ForwardSlash | Token::Percent
+    )
 }
 
 // <program> ::= <function>
@@ -76,14 +107,28 @@ pub fn parse_function(tokens: &mut VecDeque<Token>) -> Function {
 // <statement> ::= "return" <exp> ";"
 pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
     expect(Token::ReturnKeyword, tokens);
-    let expr = parse_expr(tokens);
+    let expr = parse_expr(tokens, 0);
     expect(Token::Semicolon, tokens);
 
     Statement::Return(expr)
 }
 
-// <exp> ::= <int> | <unop> <exp> | "(" <exp> ")"
-pub fn parse_expr(tokens: &mut VecDeque<Token>) -> Expr {
+// <exp> ::= <factor> | <exp> <binop> <exp>
+pub fn parse_expr(tokens: &mut VecDeque<Token>, min_prec: i32) -> Expr {
+    // We implement left associativity
+    let mut left_expr = parse_factor(tokens);
+    let mut next_token = peek(tokens).clone();
+    while is_binop(&next_token) && precedence(&next_token) >= min_prec {
+        let operator = parse_binop(tokens);
+        let right_expr = parse_expr(tokens, precedence(&next_token) + 1);
+        left_expr = Expr::Binary(operator, Box::new(left_expr), Box::new(right_expr));
+        next_token = peek(tokens).clone();
+    }
+    left_expr
+}
+
+// <factor> ::= <int> | <unop> <factor> | "(" <exp> ")"
+pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
     match peek(tokens) {
         Token::Constant(i) => {
             let expr = Expr::Constant(*i);
@@ -92,12 +137,12 @@ pub fn parse_expr(tokens: &mut VecDeque<Token>) -> Expr {
         }
         Token::Hyphen | Token::Tilde => {
             let operator = parse_unop(tokens);
-            let inner_expr = parse_expr(tokens);
+            let inner_expr = parse_factor(tokens);
             Expr::Unary(operator, Box::new(inner_expr))
         }
         Token::OpenParenthesis => {
             take_token(tokens);
-            let inner_expr = parse_expr(tokens);
+            let inner_expr = parse_expr(tokens, 0);
             expect(Token::CloseParenthesis, tokens);
             inner_expr
         }
@@ -116,6 +161,18 @@ pub fn parse_unop(tokens: &mut VecDeque<Token>) -> UnaryOperator {
             take_token(tokens);
             UnaryOperator::Complement
         }
+        _ => panic!("Malformed Expression"),
+    }
+}
+
+// <binop> ::= "-" | "+" | "*" | "/" | "%"
+pub fn parse_binop(tokens: &mut VecDeque<Token>) -> BinaryOperator {
+    match take_token(tokens) {
+        Token::Hyphen => BinaryOperator::Subtract,
+        Token::Plus => BinaryOperator::Add,
+        Token::Asterisk => BinaryOperator::Multiply,
+        Token::ForwardSlash => BinaryOperator::Divide,
+        Token::Percent => BinaryOperator::Remainder,
         _ => panic!("Malformed Expression"),
     }
 }

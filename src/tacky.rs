@@ -8,11 +8,14 @@ pub struct Program(pub Function);
 #[derive(Debug)]
 pub struct Function(pub String, pub Vec<Instruction>);
 
-// instruction = Return(val) | Unary(unary_operator, val src, val dst)
+// instruction = Return(val)
+// | Unary(unary_operator, val src, val dst)
+// | Binary(binary_operator, val src1, val src2, val dst)
 #[derive(Debug)]
 pub enum Instruction {
     Return(Val),
     Unary(UnaryOperator, Val, Val),
+    Binary(BinaryOperator, Val, Val, Val),
 }
 
 // val = Constant(int) | Var(identifier)
@@ -27,6 +30,16 @@ pub enum Val {
 pub enum UnaryOperator {
     Complement,
     Negate,
+}
+
+// binary_operator = Add | Subtract | Multiply | Divide | Remainder
+#[derive(Debug)]
+pub enum BinaryOperator {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Remainder,
 }
 
 pub fn make_temporary(var_counter: &mut usize) -> String {
@@ -80,6 +93,15 @@ pub fn ast_expression_to_tacky(
             instructions.push(Instruction::Unary(tacky_op, src, dst.clone()));
             dst
         }
+        parser::Expr::Binary(op, left_expr, right_expr) => {
+            let src_1 = ast_expression_to_tacky(left_expr, instructions, var_counter);
+            let scr_2 = ast_expression_to_tacky(right_expr, instructions, var_counter);
+            let dst_name = make_temporary(var_counter);
+            let dst = Val::Var(dst_name);
+            let tacky_op = ast_binop_to_tacky(op);
+            instructions.push(Instruction::Binary(tacky_op, src_1, scr_2, dst.clone()));
+            dst
+        }
     }
 }
 
@@ -87,5 +109,15 @@ pub fn ast_unop_to_tacky(ast_unop: &parser::UnaryOperator) -> UnaryOperator {
     match ast_unop {
         parser::UnaryOperator::Complement => UnaryOperator::Complement,
         parser::UnaryOperator::Negate => UnaryOperator::Negate,
+    }
+}
+
+pub fn ast_binop_to_tacky(ast_binop: &parser::BinaryOperator) -> BinaryOperator {
+    match ast_binop {
+        parser::BinaryOperator::Add => BinaryOperator::Add,
+        parser::BinaryOperator::Subtract => BinaryOperator::Subtract,
+        parser::BinaryOperator::Multiply => BinaryOperator::Multiply,
+        parser::BinaryOperator::Divide => BinaryOperator::Divide,
+        parser::BinaryOperator::Remainder => BinaryOperator::Remainder,
     }
 }
