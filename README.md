@@ -3,7 +3,6 @@ C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". 
 Very much a WIP.
 
 TODO:
-- Clean the assembly generation first step code.
 
 Backlog:
 - Potentially flatten some tacky to asm passes into one function rather than a gazillion.
@@ -67,8 +66,8 @@ operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int)
 reg = AX | DX | R10 | R11
 ```
 
-3 passes: 
+3 passes:
 
 1. Convert tacky to asm (refers to temp vars directly with Pseudo(identifier))
-2. Replace pseudoregisters with concrete addresses in the stack with Stack(int) 
+2. Replace pseudoregisters with concrete addresses in the stack with Stack(int)
 3. Fix up instructions so that src and dst operands are not both memory addresses

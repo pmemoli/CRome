@@ -79,7 +79,6 @@ pub fn tacky_function_to_asm(tacky_function: &tacky::Function) -> Function {
     Function(identifier, asm_instructions)
 }
 
-// Could be cleaned a LOT
 pub fn tacky_instruction_to_asm(tacky_function: &tacky::Instruction) -> Vec<Instruction> {
     match tacky_function {
         tacky::Instruction::Return(val) => {
@@ -95,23 +94,6 @@ pub fn tacky_instruction_to_asm(tacky_function: &tacky::Instruction) -> Vec<Inst
             vec![
                 Instruction::Mov(src_asm_op, dst_asm_op.clone()),
                 Instruction::Unary(unop_asm_op, dst_asm_op),
-            ]
-        }
-        tacky::Instruction::Binary(
-            binop @ tacky::BinaryOperator::Add
-            | binop @ tacky::BinaryOperator::Subtract
-            | binop @ tacky::BinaryOperator::Multiply,
-            src_a,
-            src_b,
-            dst,
-        ) => {
-            let binop_asm_op = tacky_binop_to_asm(binop);
-            let src_a_asm_op = tacky_val_to_asm(src_a);
-            let src_b_asm_op = tacky_val_to_asm(src_b);
-            let dst_asm_op = tacky_val_to_asm(dst);
-            vec![
-                Instruction::Mov(src_a_asm_op, dst_asm_op.clone()),
-                Instruction::Binary(binop_asm_op, src_b_asm_op, dst_asm_op),
             ]
         }
         tacky::Instruction::Binary(tacky::BinaryOperator::Divide, src_a, src_b, dst) => {
@@ -134,6 +116,16 @@ pub fn tacky_instruction_to_asm(tacky_function: &tacky::Instruction) -> Vec<Inst
                 Instruction::Cdq,
                 Instruction::Idiv(src_b_asm_op),
                 Instruction::Mov(Operand::Reg(Reg::DX), dst_asm_op),
+            ]
+        }
+        tacky::Instruction::Binary(binop, src_a, src_b, dst) => {
+            let binop_asm_op = tacky_binop_to_asm(binop);
+            let src_a_asm_op = tacky_val_to_asm(src_a);
+            let src_b_asm_op = tacky_val_to_asm(src_b);
+            let dst_asm_op = tacky_val_to_asm(dst);
+            vec![
+                Instruction::Mov(src_a_asm_op, dst_asm_op.clone()),
+                Instruction::Binary(binop_asm_op, src_b_asm_op, dst_asm_op),
             ]
         }
     }
@@ -196,6 +188,13 @@ pub fn resolve_pseudo_registers_instruction(
         Instruction::Unary(_, op) => {
             resolve_pseudo_registers_operand(op, identifier_map);
         }
+        Instruction::Binary(_, op_1, op_2) => {
+            resolve_pseudo_registers_operand(op_1, identifier_map);
+            resolve_pseudo_registers_operand(op_2, identifier_map);
+        }
+        Instruction::Idiv(op) => {
+            resolve_pseudo_registers_operand(op, identifier_map);
+        }
         _ => {}
     }
 }
@@ -236,6 +235,10 @@ pub fn instruction_fixup_function(function: &mut Function, stack_size: i32) {
     *instructions = allocated_instructions;
 }
 
+// instruction = Mov(operand src, operand dst)
+// | Unary(unary_operator, operand)
+// | Binary(binary_operator, operand, operand)
+// | Idiv(operand)
 pub fn instruction_fixup_instruction(instruction: &mut Instruction) -> Vec<Instruction> {
     match instruction {
         Instruction::Mov(op_a @ Operand::Stack(_), op_b @ Operand::Stack(_)) => {
@@ -244,6 +247,7 @@ pub fn instruction_fixup_instruction(instruction: &mut Instruction) -> Vec<Instr
                 Instruction::Mov(Operand::Reg(Reg::R10), op_b.clone()),
             ]
         }
+
         i => vec![i.clone()],
     }
 }
