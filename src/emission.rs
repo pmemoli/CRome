@@ -44,6 +44,17 @@ pub fn emission_instruction(asm_instructions: &codegen::Instruction) -> String {
             let op_str = emission_operand(op);
             format!("{} {}", unop_str, op_str)
         }
+        codegen::Instruction::Cdq => format!("cdq"),
+        codegen::Instruction::Binary(binop, src, dst) => {
+            let binop_str = emission_binary_operator(binop);
+            let src_str = emission_operand(src);
+            let dst_str = emission_operand(dst);
+            format!("{} {},{}", binop_str, src_str, dst_str)
+        }
+        codegen::Instruction::Idiv(op) => {
+            let op_str = emission_operand(op);
+            format!("idivl {}", op_str)
+        }
         codegen::Instruction::AllocateStack(i) => format!("subq ${}, %rsp", i),
     }
 }
@@ -52,7 +63,9 @@ pub fn emission_operand(asm_operand: &codegen::Operand) -> String {
     match asm_operand {
         codegen::Operand::Imm(i) => format!("${}", i),
         codegen::Operand::Reg(codegen::Reg::AX) => String::from("%eax"),
+        codegen::Operand::Reg(codegen::Reg::DX) => String::from("%edx"),
         codegen::Operand::Reg(codegen::Reg::R10) => String::from("%r10d"),
+        codegen::Operand::Reg(codegen::Reg::R11) => String::from("%r11d"),
         codegen::Operand::Stack(i) => format!("{}(%rbp)", i),
         _ => panic!("Unexpected operand type in emission"),
     }
@@ -62,5 +75,13 @@ pub fn emission_unary_operator(asm_unop: &codegen::UnaryOperator) -> String {
     match asm_unop {
         codegen::UnaryOperator::Not => String::from("notl"),
         codegen::UnaryOperator::Neg => String::from("negl"),
+    }
+}
+
+pub fn emission_binary_operator(asm_unop: &codegen::BinaryOperator) -> String {
+    match asm_unop {
+        codegen::BinaryOperator::Add => String::from("addl"),
+        codegen::BinaryOperator::Sub => String::from("subl"),
+        codegen::BinaryOperator::Mult => String::from("imull"),
     }
 }

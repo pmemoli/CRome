@@ -241,10 +241,36 @@ pub fn instruction_fixup_function(function: &mut Function, stack_size: i32) {
 // | Idiv(operand)
 pub fn instruction_fixup_instruction(instruction: &mut Instruction) -> Vec<Instruction> {
     match instruction {
-        Instruction::Mov(op_a @ Operand::Stack(_), op_b @ Operand::Stack(_)) => {
+        Instruction::Mov(src @ Operand::Stack(_), dst @ Operand::Stack(_)) => {
             vec![
-                Instruction::Mov(op_a.clone(), Operand::Reg(Reg::R10)),
-                Instruction::Mov(Operand::Reg(Reg::R10), op_b.clone()),
+                Instruction::Mov(src.clone(), Operand::Reg(Reg::R10)),
+                Instruction::Mov(Operand::Reg(Reg::R10), dst.clone()),
+            ]
+        }
+
+        Instruction::Idiv(op @ Operand::Imm(_)) => {
+            vec![
+                Instruction::Mov(op.clone(), Operand::Reg(Reg::R10)),
+                Instruction::Idiv(Operand::Reg(Reg::R10)),
+            ]
+        }
+
+        Instruction::Binary(
+            binop @ BinaryOperator::Add | binop @ BinaryOperator::Sub,
+            src @ Operand::Stack(_),
+            dst @ Operand::Stack(_),
+        ) => {
+            vec![
+                Instruction::Mov(src.clone(), Operand::Reg(Reg::R10)),
+                Instruction::Binary(binop.clone(), Operand::Reg(Reg::R10), dst.clone()),
+            ]
+        }
+
+        Instruction::Binary(BinaryOperator::Mult, src, dst @ Operand::Stack(_)) => {
+            vec![
+                Instruction::Mov(dst.clone(), Operand::Reg(Reg::R11)),
+                Instruction::Binary(BinaryOperator::Mult, src.clone(), Operand::Reg(Reg::R11)),
+                Instruction::Mov(Operand::Reg(Reg::R11), dst.clone()),
             ]
         }
 

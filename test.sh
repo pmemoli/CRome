@@ -1,3 +1,3 @@
 #!/bin/sh
 
-./tests/test_compiler ./target/debug/crab --chapter 3 --stage tacky
+./tests/test_compiler ./target/debug/crab --chapter 3
