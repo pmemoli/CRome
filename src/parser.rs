@@ -25,14 +25,17 @@ pub enum Expr {
     Binary(BinaryOperator, Box<Expr>, Box<Expr>),
 }
 
-// unary_operator = Complement | Negate
+// unary_operator = Complement | Negate | Not
 #[derive(Debug)]
 pub enum UnaryOperator {
     Complement,
     Negate,
+    Not,
 }
 
-// binary_operator = Add | Subtract | Multiply | Divide | Remainder
+// binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
+//     | Equal | NotEqual | LessThan | LessOrEqual
+//     | GreaterThan | GreaterOrEqual
 #[derive(Debug)]
 pub enum BinaryOperator {
     Add,
@@ -40,6 +43,14 @@ pub enum BinaryOperator {
     Multiply,
     Divide,
     Remainder,
+    And,
+    Or,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
 }
 
 // utils
@@ -63,6 +74,13 @@ fn take_token(tokens: &mut VecDeque<Token>) -> Token {
 
 fn precedence(operator: &Token) -> i32 {
     match operator {
+        Token::TwoVerticalBar => 5,
+        Token::TwoAmpersand => 10,
+        Token::TwoEqual | Token::NotEqual => 30,
+        Token::LessThan
+        | Token::LessThanOrEqual
+        | Token::GreaterThan
+        | Token::GreaterThanOrEqual => 35,
         Token::Plus | Token::Hyphen => 45,
         Token::Asterisk | Token::ForwardSlash | Token::Percent => 50,
         _ => panic!(
@@ -75,7 +93,19 @@ fn precedence(operator: &Token) -> i32 {
 fn is_binop(token: &Token) -> bool {
     matches!(
         token,
-        Token::Plus | Token::Hyphen | Token::Asterisk | Token::ForwardSlash | Token::Percent
+        Token::Plus
+            | Token::Hyphen
+            | Token::Asterisk
+            | Token::ForwardSlash
+            | Token::Percent
+            | Token::TwoAmpersand
+            | Token::TwoVerticalBar
+            | Token::TwoEqual
+            | Token::NotEqual
+            | Token::LessThan
+            | Token::LessThanOrEqual
+            | Token::GreaterThan
+            | Token::GreaterThanOrEqual
     )
 }
 
@@ -135,7 +165,7 @@ pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
             take_token(tokens);
             expr
         }
-        Token::Hyphen | Token::Tilde => {
+        Token::Hyphen | Token::Tilde | Token::Exclamation => {
             let operator = parse_unop(tokens);
             let inner_expr = parse_factor(tokens);
             Expr::Unary(operator, Box::new(inner_expr))
@@ -150,7 +180,7 @@ pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
     }
 }
 
-// <unop> ::= "-" | "~"
+// <unop> ::= "-" | "~" | "!"
 pub fn parse_unop(tokens: &mut VecDeque<Token>) -> UnaryOperator {
     match peek(tokens) {
         Token::Hyphen => {
@@ -161,11 +191,16 @@ pub fn parse_unop(tokens: &mut VecDeque<Token>) -> UnaryOperator {
             take_token(tokens);
             UnaryOperator::Complement
         }
+        Token::Exclamation => {
+            take_token(tokens);
+            UnaryOperator::Not
+        }
         _ => panic!("Malformed Expression"),
     }
 }
 
-// <binop> ::= "-" | "+" | "*" | "/" | "%"
+// <binop> ::= "-" | "+" | "*" | "/" | "%" | "&&" | "||"
+//     | "==" | "!=" | "<" | "<=" | ">" | ">="
 pub fn parse_binop(tokens: &mut VecDeque<Token>) -> BinaryOperator {
     match take_token(tokens) {
         Token::Hyphen => BinaryOperator::Subtract,
@@ -173,6 +208,14 @@ pub fn parse_binop(tokens: &mut VecDeque<Token>) -> BinaryOperator {
         Token::Asterisk => BinaryOperator::Multiply,
         Token::ForwardSlash => BinaryOperator::Divide,
         Token::Percent => BinaryOperator::Remainder,
+        Token::TwoAmpersand => BinaryOperator::And,
+        Token::TwoVerticalBar => BinaryOperator::Or,
+        Token::TwoEqual => BinaryOperator::Equal,
+        Token::NotEqual => BinaryOperator::NotEqual,
+        Token::LessThan => BinaryOperator::LessThan,
+        Token::LessThanOrEqual => BinaryOperator::LessThanOrEqual,
+        Token::GreaterThan => BinaryOperator::GreaterThan,
+        Token::GreaterThanOrEqual => BinaryOperator::GreaterThanOrEqual,
         _ => panic!("Malformed Expression"),
     }
 }

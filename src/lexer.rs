@@ -20,6 +20,15 @@ pub enum Token {
     Asterisk,
     ForwardSlash,
     Percent,
+    Exclamation,
+    TwoAmpersand,
+    TwoVerticalBar,
+    TwoEqual,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
 }
 
 pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
@@ -41,12 +50,21 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
         (Regex::new(r"^\}").unwrap(), |_| Token::CloseBrace),
         (Regex::new(r"^;").unwrap(), |_| Token::Semicolon),
         (Regex::new(r"^~").unwrap(), |_| Token::Tilde),
-        (Regex::new(r"^-").unwrap(), |_| Token::Hyphen),
         (Regex::new(r"^--").unwrap(), |_| Token::TwoHyphens),
+        (Regex::new(r"^!").unwrap(), |_| Token::Exclamation),
+        (Regex::new(r"^-").unwrap(), |_| Token::Hyphen),
         (Regex::new(r"^\+").unwrap(), |_| Token::Plus),
         (Regex::new(r"^\*").unwrap(), |_| Token::Asterisk),
         (Regex::new(r"^/").unwrap(), |_| Token::ForwardSlash),
         (Regex::new(r"^%").unwrap(), |_| Token::Percent),
+        (Regex::new(r"^&&").unwrap(), |_| Token::TwoAmpersand),
+        (Regex::new(r"^\|\|").unwrap(), |_| Token::TwoVerticalBar),
+        (Regex::new(r"^==").unwrap(), |_| Token::TwoEqual),
+        (Regex::new(r"^!=").unwrap(), |_| Token::NotEqual),
+        (Regex::new(r"^<").unwrap(), |_| Token::LessThan),
+        (Regex::new(r"^<=").unwrap(), |_| Token::LessThanOrEqual),
+        (Regex::new(r"^>").unwrap(), |_| Token::GreaterThan),
+        (Regex::new(r"^>=").unwrap(), |_| Token::GreaterThanOrEqual),
     ];
 
     let mut i = 0;
