@@ -4,11 +4,11 @@ use std::fs;
 use std::process::Command;
 use tempfile::{Builder, NamedTempFile};
 
-// mod codegen;
+mod codegen;
 // mod emission;
 mod lexer;
 mod parser;
-// mod tacky;
+mod tacky;
 
 #[derive(Parser)]
 #[command(name = "crab")]
@@ -58,26 +58,25 @@ fn main() -> Result<()> {
     }
 
     let ast = crate::parser::parse_program(&mut tokens);
-    println!("{:#?}", ast);
 
     if args.parse {
         return Ok(());
     }
 
-    // let tacky_ast = crate::tacky::ast_program_to_tacky(&ast);
-    //
-    // if args.tacky {
-    //     return Ok(());
-    // }
-    //
-    // let asm_ast = crate::codegen::codegen_program(&tacky_ast);
-    //
-    // println!("\n{:#?}", asm_ast);
-    //
-    // if args.codegen {
-    //     return Ok(());
-    // }
-    //
+    let (tacky_ast, symbol_table) = crate::tacky::ast_program_to_tacky(&ast);
+
+    if args.tacky {
+        return Ok(());
+    }
+
+    let asm_ast = crate::codegen::codegen_program(&tacky_ast);
+
+    println!("\n{:#?}", asm_ast);
+
+    if args.codegen {
+        return Ok(());
+    }
+
     // let asm_str = crate::emission::emission_program(&asm_ast);
     //
     // print!("\n{}", asm_str);

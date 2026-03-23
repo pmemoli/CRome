@@ -10,19 +10,29 @@ pub struct Program(pub Function);
 pub struct Function(pub String, pub Vec<Instruction>);
 
 // instruction = Mov(operand src, operand dst)
-// | Unary(unary_operator, operand)
-// | Binary(binary_operator, operand, operand)
-// | Idiv(operand)
-// | Cdq
-// | AllocateStack(int)
-// | Ret
+//     | Unary(unary_operator, operand)
+//     | Binary(binary_operator, operand, operand)
+//     | Cmp(operand, operand)
+//     | Idiv(operand)
+//     | Cdq
+//     | Jmp(identifier)
+//     | JmpCC(cond_code, identifier)
+//     | SetCC(cond_code, operand)
+//     | Label(identifier)
+//     | AllocateStack(int)
+//     | Ret
 #[derive(Debug, Clone)]
 pub enum Instruction {
     Mov(Operand, Operand),
     Unary(UnaryOperator, Operand),
     Binary(BinaryOperator, Operand, Operand),
+    Cmp(Operand, Operand),
     Idiv(Operand),
     Cdq,
+    Jmp(String),
+    JmpCC(CondCode, String),
+    SetCC(CondCode, Operand),
+    Label(String),
     AllocateStack(i32),
     Ret,
 }
@@ -49,6 +59,17 @@ pub enum Operand {
     Reg(Reg),
     Pseudo(String),
     Stack(i32),
+}
+
+// cond_code = E | NE | G | GE | L | LE
+#[derive(Debug, Clone)]
+pub enum CondCode {
+    E,
+    NE,
+    G,
+    GE,
+    L,
+    LE,
 }
 
 // reg = AX | DX | R10 | R11
@@ -80,6 +101,14 @@ pub fn tacky_function_to_asm(tacky_function: &tacky::Function) -> Function {
 }
 
 pub fn tacky_instruction_to_asm(tacky_function: &tacky::Instruction) -> Vec<Instruction> {
+    // Return(Val),
+    // Unary(UnaryOperator, Val, Val),
+    // Binary(BinaryOperator, Val, Val, Val),
+    // Copy(Val, Val),
+    // Jump(String),
+    // JumpIfZero(Val, String),
+    // JumpIfNotZero(Val, String),
+    // Label(String),
     match tacky_function {
         tacky::Instruction::Return(val) => {
             let src_asm_op = tacky_val_to_asm(val);

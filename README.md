@@ -44,19 +44,24 @@ binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
 ## TACKY Grammar
 ```
 program = Program(function_definition)
-function_definition = Function(identifier, instruction* body)
-instruction = Return(val)
-    | Unary(unary_operator, val src, val dst)
-    | Binary(binary_operator, val src1, val src2, val dst)
-    | Copy(val src, val dst)
-    | Jump(identifier target)
-    | JumpIfZero(val condition, identifier target)
-    | JumpIfNotZero(val condition, identifier target)
+function_definition = Function(identifier name, instruction* instructions)
+instruction = Mov(operand src, operand dst)
+    | Unary(unary_operator, operand)
+    | Binary(binary_operator, operand, operand)
+    | Cmp(operand, operand)
+    | Idiv(operand)
+    | Cdq
+    | Jmp(identifier)
+    | JmpCC(cond_code, identifier)
+    | SetCC(cond_code, operand)
     | Label(identifier)
-val = Constant(int) | Var(identifier)
-unary_operator = Complement | Negate | Not
-binary_operator = Add | Subtract | Multiply | Divide | Remainder | Equal | NotEqual
-    | LessThan | LessOrEqual | GreaterThan | GreaterOrEqual
+    | AllocateStack(int)
+    | Ret
+unary_operator = Neg | Not
+binary_operator = Add | Sub | Mult
+operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int)
+cond_code = E | NE | G | GE | L | LE
+reg = AX | DX | R10 | R11
 ```
 
 ## ASM Grammar
