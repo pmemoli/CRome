@@ -5,9 +5,10 @@ use std::process::Command;
 use tempfile::{Builder, NamedTempFile};
 
 mod codegen;
-// mod emission;
+mod emission;
 mod lexer;
 mod parser;
+mod symbol;
 mod tacky;
 
 #[derive(Parser)]
@@ -49,6 +50,8 @@ fn main() -> Result<()> {
     }
 
     // Runs compiler
+    let mut symbol_table = symbol::SymbolTable::new();
+
     let content = fs::read_to_string(preprocessor_file_path)?;
 
     let mut tokens = crate::lexer::lexical_analysis(&content);
@@ -63,13 +66,13 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let (tacky_ast, symbol_table) = crate::tacky::ast_program_to_tacky(&ast);
+    let tacky_ast = crate::tacky::ast_program_to_tacky(&ast, &mut symbol_table);
 
     if args.tacky {
         return Ok(());
     }
 
-    let asm_ast = crate::codegen::codegen_program(&tacky_ast);
+    let asm_ast = crate::codegen::codegen_program(&tacky_ast, &mut symbol_table);
 
     println!("\n{:#?}", asm_ast);
 
@@ -77,26 +80,26 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // let asm_str = crate::emission::emission_program(&asm_ast);
-    //
-    // print!("\n{}", asm_str);
-    //
-    // let assembly_file = Builder::new().suffix(".s").tempfile()?;
-    // let assembly_file_path = assembly_file.path();
-    //
-    // fs::write(assembly_file_path, asm_str)?;
-    //
-    // // Runs linker
-    // let output_file = source_file.strip_suffix(".c").unwrap_or(source_file);
-    // let linker_status = Command::new("gcc")
-    //     .arg(assembly_file_path)
-    //     .arg("-o")
-    //     .arg(output_file)
-    //     .status()?;
-    //
-    // if !linker_status.success() {
-    //     bail!("Linking failed at runtime.");
-    // }
-    //
+    let asm_str = crate::emission::emission_program(&asm_ast);
+
+    print!("\n{}", asm_str);
+
+    let assembly_file = Builder::new().suffix(".s").tempfile()?;
+    let assembly_file_path = assembly_file.path();
+
+    fs::write(assembly_file_path, asm_str)?;
+
+    // Runs linker
+    let output_file = source_file.strip_suffix(".c").unwrap_or(source_file);
+    let linker_status = Command::new("gcc")
+        .arg(assembly_file_path)
+        .arg("-o")
+        .arg(output_file)
+        .status()?;
+
+    if !linker_status.success() {
+        bail!("Linking failed at runtime.");
+    }
+
     Ok(())
 }

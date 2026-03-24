@@ -1,3 +1,4 @@
+use crate::symbol::SymbolTable;
 use std::collections::HashMap;
 
 use crate::parser;
@@ -57,39 +58,24 @@ pub enum BinaryOperator {
     Equal,
     NotEqual,
     LessThan,
-    LessThanOrEqual,
+    LessOrEqual,
     GreaterThan,
-    GreaterThanOrEqual,
+    GreaterOrEqual,
 }
 
-pub fn make_temporary(symbol_table: &mut HashMap<String, i32>) -> String {
-    let temp_name = format!("tmp.{}", symbol_table["tmp"]);
-    symbol_table.insert("tmp".to_string(), symbol_table["tmp"] + 1);
-    temp_name
-}
-
-pub fn make_label(symbol_table: &mut HashMap<String, i32>) -> i32 {
-    let label_idx = symbol_table["label"];
-    symbol_table.insert("label".to_string(), symbol_table["label"] + 1);
-    label_idx
-}
-
-pub fn ast_program_to_tacky(ast_program: &parser::Program) -> (Program, HashMap<String, i32>) {
-    // Initialize symbol table
-    let mut symbol_table = HashMap::new();
-    symbol_table.insert("tmp".to_string(), 0);
-    symbol_table.insert("label".to_string(), 0);
-
+pub fn ast_program_to_tacky(
+    ast_program: &parser::Program,
+    symbol_table: &mut SymbolTable,
+) -> Program {
     let parser::Program(ast_function) = ast_program;
+    let tacky_function = ast_function_to_tacky(ast_function, symbol_table);
 
-    let tacky_function = ast_function_to_tacky(ast_function, &mut symbol_table);
-
-    (Program(tacky_function), symbol_table)
+    Program(tacky_function)
 }
 
 pub fn ast_function_to_tacky(
     ast_function: &parser::Function,
-    symbol_table: &mut HashMap<String, i32>,
+    symbol_table: &mut SymbolTable,
 ) -> Function {
     let parser::Function(ast_identifier, ast_statement) = ast_function;
 
@@ -101,7 +87,7 @@ pub fn ast_function_to_tacky(
 
 pub fn ast_statement_to_tacky(
     ast_statement: &parser::Statement,
-    symbol_table: &mut HashMap<String, i32>,
+    symbol_table: &mut SymbolTable,
 ) -> Vec<Instruction> {
     let mut instructions = Vec::new();
 
@@ -116,13 +102,13 @@ pub fn ast_statement_to_tacky(
 pub fn ast_expression_to_tacky(
     ast_expr: &parser::Expr,
     instructions: &mut Vec<Instruction>,
-    symbol_table: &mut HashMap<String, i32>,
+    symbol_table: &mut SymbolTable,
 ) -> Val {
     match ast_expr {
         parser::Expr::Constant(i) => Val::Constant(*i),
         parser::Expr::Unary(op, expr) => {
             let src = ast_expression_to_tacky(expr, instructions, symbol_table);
-            let dst_name = make_temporary(symbol_table);
+            let dst_name = SymbolTable::generate_variable(symbol_table);
             let dst = Val::Var(dst_name);
             let tacky_op = ast_unop_to_tacky(op);
             instructions.push(Instruction::Unary(tacky_op, src, dst.clone()));
@@ -131,7 +117,7 @@ pub fn ast_expression_to_tacky(
         parser::Expr::Binary(op, left_expr, right_expr) => match op {
             // Short circuit binary operators
             parser::BinaryOperator::And | parser::BinaryOperator::Or => {
-                let label_idx = make_label(symbol_table);
+                let label_idx = SymbolTable::generate_label_idx(symbol_table);
 
                 let val_1 = ast_expression_to_tacky(left_expr, instructions, symbol_table);
 
@@ -161,7 +147,7 @@ pub fn ast_expression_to_tacky(
                     ));
                 }
 
-                let dst_name = make_temporary(symbol_table);
+                let dst_name = SymbolTable::generate_variable(symbol_table);
                 let dst = Val::Var(dst_name);
 
                 instructions.push(Instruction::Copy(Val::Constant(1), dst.clone()));
@@ -177,7 +163,7 @@ pub fn ast_expression_to_tacky(
             _ => {
                 let val_1 = ast_expression_to_tacky(left_expr, instructions, symbol_table);
                 let val_2 = ast_expression_to_tacky(right_expr, instructions, symbol_table);
-                let dst_name = make_temporary(symbol_table);
+                let dst_name = SymbolTable::generate_variable(symbol_table);
                 let dst = Val::Var(dst_name);
                 let tacky_op = ast_binop_to_tacky(op);
                 instructions.push(Instruction::Binary(tacky_op, val_1, val_2, dst.clone()));
@@ -205,9 +191,9 @@ pub fn ast_binop_to_tacky(ast_binop: &parser::BinaryOperator) -> BinaryOperator 
         parser::BinaryOperator::Equal => BinaryOperator::Equal,
         parser::BinaryOperator::NotEqual => BinaryOperator::NotEqual,
         parser::BinaryOperator::LessThan => BinaryOperator::LessThan,
-        parser::BinaryOperator::LessThanOrEqual => BinaryOperator::LessThanOrEqual,
+        parser::BinaryOperator::LessThanOrEqual => BinaryOperator::LessOrEqual,
         parser::BinaryOperator::GreaterThan => BinaryOperator::GreaterThan,
-        parser::BinaryOperator::GreaterThanOrEqual => BinaryOperator::GreaterThanOrEqual,
+        parser::BinaryOperator::GreaterThanOrEqual => BinaryOperator::GreaterOrEqual,
         _ => panic!("Unsupported binary operator: {:?}", ast_binop), // Missing AND and OR
     }
 }

@@ -3,7 +3,9 @@ C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". 
 Very much a WIP.
 
 TODO:
-- Chapter 4 parser
+- Chapter 4 emission.
+- Refactor the codegen into three files, its kinda big now.
+- The label counter should be local to the codegen pass, not part of symbol table.
 
 Backlog:
 - Potentially flatten some tacky to asm passes into one function rather than a gazillion.
