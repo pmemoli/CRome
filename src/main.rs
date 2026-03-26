@@ -74,8 +74,6 @@ fn main() -> Result<()> {
 
     let asm_ast = crate::codegen::codegen_program(&tacky_ast, &mut symbol_table);
 
-    println!("\n{:#?}", asm_ast);
-
     if args.codegen {
         return Ok(());
     }

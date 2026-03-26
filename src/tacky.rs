@@ -124,40 +124,34 @@ pub fn ast_expression_to_tacky(
                 if let parser::BinaryOperator::And = op {
                     instructions.push(Instruction::JumpIfZero(
                         val_1,
-                        format!("shortcircuit.{}", label_idx),
+                        format!("false_result.{}", label_idx),
                     ));
                 } else {
                     instructions.push(Instruction::JumpIfNotZero(
                         val_1,
-                        format!("shortcircuit.{}", label_idx),
+                        format!("true_result.{}", label_idx),
                     ));
                 }
 
                 let val_2 = ast_expression_to_tacky(right_expr, instructions, symbol_table);
 
-                if let parser::BinaryOperator::And = op {
-                    instructions.push(Instruction::JumpIfZero(
-                        val_2,
-                        format!("shortcircuit.{}", label_idx),
-                    ))
-                } else {
-                    instructions.push(Instruction::JumpIfNotZero(
-                        val_2,
-                        format!("shortcircuit.{}", label_idx),
-                    ));
-                }
+                instructions.push(Instruction::JumpIfZero(
+                    val_2,
+                    format!("false_result.{}", label_idx),
+                ));
 
                 let dst_name = SymbolTable::generate_variable(symbol_table);
                 let dst = Val::Var(dst_name);
 
+                instructions.push(Instruction::Label(format!("true_result.{}", label_idx)));
                 instructions.push(Instruction::Copy(Val::Constant(1), dst.clone()));
+
                 instructions.push(Instruction::Jump(format!("end.{}", label_idx)));
 
-                instructions.push(Instruction::Label(format!("shortcircuit.{}", label_idx)));
+                instructions.push(Instruction::Label(format!("false_result.{}", label_idx)));
                 instructions.push(Instruction::Copy(Val::Constant(0), dst.clone()));
 
                 instructions.push(Instruction::Label(format!("end.{}", label_idx)));
-
                 dst
             }
             _ => {

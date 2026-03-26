@@ -115,7 +115,7 @@ pub fn tacky_instruction_to_asm(tacky_function: &tacky::Instruction) -> Vec<Inst
             match unop {
                 tacky::UnaryOperator::Not => {
                     vec![
-                        Instruction::Cmp(src_asm_op, Operand::Imm(0)),
+                        Instruction::Cmp(Operand::Imm(0), src_asm_op),
                         Instruction::Mov(Operand::Imm(0), dst_asm_op.clone()),
                         Instruction::SetCC(CondCode::E, dst_asm_op),
                     ]
@@ -160,7 +160,7 @@ pub fn tacky_instruction_to_asm(tacky_function: &tacky::Instruction) -> Vec<Inst
                 | tacky::BinaryOperator::GreaterOrEqual => {
                     let cond_code = tacky_binop_to_cond_asm(op);
                     vec![
-                        Instruction::Cmp(src_a_asm_op, src_b_asm_op),
+                        Instruction::Cmp(src_b_asm_op, src_a_asm_op),
                         Instruction::Mov(Operand::Imm(0), dst_asm_op.clone()),
                         Instruction::SetCC(cond_code, dst_asm_op),
                     ]
@@ -184,14 +184,14 @@ pub fn tacky_instruction_to_asm(tacky_function: &tacky::Instruction) -> Vec<Inst
         tacky::Instruction::JumpIfZero(cond, label) => {
             let cond_asm_op = tacky_val_to_asm(cond);
             vec![
-                Instruction::Cmp(cond_asm_op, Operand::Imm(0)),
+                Instruction::Cmp(Operand::Imm(0), cond_asm_op),
                 Instruction::JmpCC(CondCode::E, label.to_string()),
             ]
         }
         tacky::Instruction::JumpIfNotZero(cond, label) => {
             let cond_asm_op = tacky_val_to_asm(cond);
             vec![
-                Instruction::Cmp(cond_asm_op, Operand::Imm(0)),
+                Instruction::Cmp(Operand::Imm(0), cond_asm_op),
                 Instruction::JmpCC(CondCode::NE, label.to_string()),
             ]
         }
@@ -268,6 +268,13 @@ pub fn resolve_pseudo_registers_instruction(
             resolve_pseudo_registers_operand(op_2, symbol_table);
         }
         Instruction::Idiv(op) => {
+            resolve_pseudo_registers_operand(op, symbol_table);
+        }
+        Instruction::Cmp(op_1, op_2) => {
+            resolve_pseudo_registers_operand(op_1, symbol_table);
+            resolve_pseudo_registers_operand(op_2, symbol_table);
+        }
+        Instruction::SetCC(_, op) => {
             resolve_pseudo_registers_operand(op, symbol_table);
         }
         _ => {}

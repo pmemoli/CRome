@@ -1,3 +1,3 @@
 #!/bin/sh
 
-./tests/test_compiler ./target/debug/crab --chapter 4 --stage codegen
+./tests/test_compiler ./target/debug/crab --chapter 4
