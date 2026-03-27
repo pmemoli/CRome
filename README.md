@@ -1,9 +1,9 @@
 C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". The project is just the the preprocessed C to ASM compiler. Preprocessor and Linker comes from gcc. 
 
-Very much a WIP.
+Very much a WIP, currently in chapter 5 out of 20.
 
 TODO:
-- Debug chapter 4...
+- Chapter 5: Parser
 - Refactor the codegen into three files, its kinda big now.
 - The label counter should be local to the codegen pass, not part of symbol table.
 
@@ -18,30 +18,34 @@ Backlog:
 ## AST Specification
 ```
 program = Program(function_definition)
-function_definition = Function(identifier name, statement body)
-statement = Return(exp)
+function_definition = Function(identifier name, block_item* body)
+block_item = S(statement) | D(declaration)
+declaration = Declaration(identifier name, exp? init)
+statement = Return(exp) | Expression(exp) | Null
 exp = Constant(int)
+    | Var(identifier)
     | Unary(unary_operator, exp)
     | Binary(binary_operator, exp, exp)
+    | Assignment(exp, exp)
 unary_operator = Complement | Negate | Not
 binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
-    | Equal | NotEqual | LessThan | LessOrEqual
-    | GreaterThan | GreaterOrEqual
+    | Equal | NotEqual | LessThan | LessOrEqual | GreaterThan | GreaterOrEqual
 ```
 
 ## Formal Grammar
 ```
 <program> ::= <function>
-<function> ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
-<statement> ::= "return" <exp> ";"
+<function> ::= "int" <identifier> "(" "void" ")" "{" { <block-item> } "}"
+<block-item> ::= <statement> | <declaration>
+<declaration> ::= "int" <identifier> [ "=" <exp> ] ";"
+<statement> ::= "return" <exp> ";" | <exp> ";" | ";"
 <exp> ::= <factor> | <exp> <binop> <exp>
-<factor> ::= <int> | <unop> <factor> | "(" <exp> ")"
+<factor> ::= <int> | <identifier> | <unop> <factor> | "(" <exp> ")"
 <unop> ::= "-" | "~" | "!"
 <binop> ::= "-" | "+" | "*" | "/" | "%" | "&&" | "||"
-    | "==" | "!=" | "<" | "<=" | ">" | ">="
+    | "==" | "!=" | "<" | "<=" | ">" | ">=" | "="
 <identifier> ::= ? An identifier token ?
-<int> ::= ? A constant token ?
-```
+<int> ::= ? A constant token ?```
 
 ## TACKY Grammar
 ```

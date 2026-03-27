@@ -5,24 +5,43 @@ use std::collections::VecDeque;
 #[derive(Debug)]
 pub struct Program(pub Function);
 
-// function_definition = Function(identifier name, statement body)
+// function_definition = Function(identifier name, block_item* body)
 #[derive(Debug)]
-pub struct Function(pub String, pub Statement);
+pub struct Function(pub String, pub Vec<BlockItem>);
 
-// statement = Return(exp)
+// block_item = S(statement) | D(declaration)
+#[derive(Debug)]
+pub enum BlockItem {
+    S(Statement),
+    D(Declaration),
+}
+
+// declaration = Declaration(identifier name, exp? init)
+#[derive(Debug)]
+pub struct Declaration(pub String, pub Option<Expr>);
+
+// statement = Return(exp) | Expression(exp) | Null
 #[derive(Debug)]
 pub enum Statement {
     Return(Expr),
+    Expression(Expr),
+    Null,
 }
 
 // exp = Constant(int)
+//     | Var(identifier)
 //     | Unary(unary_operator, exp)
 //     | Binary(binary_operator, exp, exp)
+//     | Assignment(exp, exp)
 #[derive(Debug)]
 pub enum Expr {
+    // factors
     Constant(i32),
+    Var(String),
     Unary(UnaryOperator, Box<Expr>),
+    // compound expressions
     Binary(BinaryOperator, Box<Expr>, Box<Expr>),
+    Assignment(Box<Expr>, Box<Expr>),
 }
 
 // unary_operator = Complement | Negate | Not
@@ -83,6 +102,7 @@ fn precedence(operator: &Token) -> i32 {
         | Token::GreaterThanOrEqual => 35,
         Token::Plus | Token::Hyphen => 45,
         Token::Asterisk | Token::ForwardSlash | Token::Percent => 50,
+        Token::Equal => 1,
         _ => panic!(
             "Syntax Error: Expected a binary operator but found {:?}",
             operator
@@ -106,6 +126,7 @@ fn is_binop(token: &Token) -> bool {
             | Token::LessThanOrEqual
             | Token::GreaterThan
             | Token::GreaterThanOrEqual
+            | Token::Equal
     )
 }
 
@@ -120,7 +141,7 @@ pub fn parse_program(tokens: &mut VecDeque<Token>) -> Program {
     Program(function)
 }
 
-// <function> ::= "int" <identifier> "(" "void" ")" "{" <statement> "}"
+// <function> ::= "int" <identifier> "(" "void" ")" "{" { <block-item> } "}"
 pub fn parse_function(tokens: &mut VecDeque<Token>) -> Function {
     expect(Token::IntKeyword, tokens);
     let identifier = parse_identifier(tokens);
@@ -128,36 +149,81 @@ pub fn parse_function(tokens: &mut VecDeque<Token>) -> Function {
     expect(Token::VoidKeyword, tokens);
     expect(Token::CloseParenthesis, tokens);
     expect(Token::OpenBrace, tokens);
-    let statement = parse_statement(tokens);
-    expect(Token::CloseBrace, tokens);
 
-    Function(identifier, statement)
+    let mut function_body = Vec::new();
+    while !matches!(peek(tokens), Token::CloseBrace) {
+        let next_block_item = parse_block_item(tokens);
+        function_body.push(next_block_item);
+    }
+    take_token(tokens);
+
+    Function(identifier, function_body)
 }
 
-// <statement> ::= "return" <exp> ";"
-pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
-    expect(Token::ReturnKeyword, tokens);
-    let expr = parse_expr(tokens, 0);
+// <block-item> ::= <statement> | <declaration>
+pub fn parse_block_item(tokens: &mut VecDeque<Token>) -> BlockItem {
+    match peek(tokens) {
+        Token::IntKeyword => BlockItem::D(parse_declaration(tokens)),
+        _ => BlockItem::S(parse_statement(tokens)),
+    }
+}
+
+// <declaration> ::= "int" <identifier> [ "=" <exp> ] ";"
+pub fn parse_declaration(tokens: &mut VecDeque<Token>) -> Declaration {
+    expect(Token::IntKeyword, tokens);
+    let identifier = parse_identifier(tokens);
+    let init = if matches!(peek(tokens), Token::Equal) {
+        take_token(tokens);
+        Some(parse_expr(tokens, 0))
+    } else {
+        None
+    };
     expect(Token::Semicolon, tokens);
 
-    Statement::Return(expr)
+    Declaration(identifier, init)
+}
+
+// <statement> ::= "return" <exp> ";" | <exp> ";" | ";"
+pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
+    match peek(tokens) {
+        Token::ReturnKeyword => {
+            take_token(tokens);
+            let expr = parse_expr(tokens, 0);
+            expect(Token::Semicolon, tokens);
+            Statement::Return(expr)
+        }
+        Token::Semicolon => {
+            take_token(tokens);
+            Statement::Null
+        }
+        _ => {
+            let expr = parse_expr(tokens, 0);
+            expect(Token::Semicolon, tokens);
+            Statement::Expression(expr)
+        }
+    }
 }
 
 // <exp> ::= <factor> | <exp> <binop> <exp>
 pub fn parse_expr(tokens: &mut VecDeque<Token>, min_prec: i32) -> Expr {
-    // We implement left associativity
     let mut left_expr = parse_factor(tokens);
     let mut next_token = peek(tokens).clone();
     while is_binop(&next_token) && precedence(&next_token) >= min_prec {
-        let operator = parse_binop(tokens);
-        let right_expr = parse_expr(tokens, precedence(&next_token) + 1);
-        left_expr = Expr::Binary(operator, Box::new(left_expr), Box::new(right_expr));
+        if next_token == Token::Equal {
+            take_token(tokens);
+            let right_expr = parse_expr(tokens, precedence(&next_token));
+            left_expr = Expr::Assignment(Box::new(left_expr), Box::new(right_expr));
+        } else {
+            let operator = parse_binop(tokens);
+            let right_expr = parse_expr(tokens, precedence(&next_token) + 1);
+            left_expr = Expr::Binary(operator, Box::new(left_expr), Box::new(right_expr));
+        }
         next_token = peek(tokens).clone();
     }
     left_expr
 }
 
-// <factor> ::= <int> | <unop> <factor> | "(" <exp> ")"
+// <factor> ::= <int> | <identifier> | <unop> <factor> | "(" <exp> ")"
 pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
     match peek(tokens) {
         Token::Constant(i) => {
@@ -175,6 +241,11 @@ pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
             let inner_expr = parse_expr(tokens, 0);
             expect(Token::CloseParenthesis, tokens);
             inner_expr
+        }
+        Token::Identifier(s) => {
+            let expr = Expr::Var(s.to_string());
+            take_token(tokens);
+            expr
         }
         _ => panic!("Malformed Expression"),
     }
