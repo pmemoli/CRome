@@ -4,7 +4,7 @@ Very much a WIP, currently in chapter 5 out of 20.
 
 TODO:
 
-- Chapter 5: Parser
+- Chapter 6.
 - Refactor the codegen into three files, its kinda big now.
 - The label counter should be local to the codegen pass, not part of symbol table.
 
