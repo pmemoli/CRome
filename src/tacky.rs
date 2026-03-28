@@ -77,12 +77,36 @@ pub fn ast_function_to_tacky(
     ast_function: &parser::Function,
     symbol_table: &mut SymbolTable,
 ) -> Function {
-    let parser::Function(ast_identifier, ast_statement) = ast_function;
+    let parser::Function(identifier, block_items) = ast_function;
 
-    let identifier = ast_identifier.to_string();
-    let instructions = ast_statement_to_tacky(ast_statement, symbol_table);
+    let mut instructions: Vec<_> = block_items
+        .iter()
+        .flat_map(|item| ast_block_to_tacky(item, symbol_table))
+        .collect();
 
-    Function(identifier, instructions)
+    instructions.push(Instruction::Return(Val::Constant(0)));
+
+    Function(identifier.clone(), instructions)
+}
+
+pub fn ast_block_to_tacky(
+    ast_block: &parser::BlockItem,
+    symbol_table: &mut SymbolTable,
+) -> Vec<Instruction> {
+    match ast_block {
+        parser::BlockItem::S(statement) => ast_statement_to_tacky(statement, symbol_table),
+        parser::BlockItem::D(declaration) => {
+            let parser::Declaration(name, init) = declaration;
+            let mut instructions = Vec::new();
+            if let Some(e) = init.as_ref() {
+                let value = ast_expression_to_tacky(e, &mut instructions, symbol_table);
+                let dst = Val::Var(name.clone());
+                instructions.push(Instruction::Copy(value, dst.clone()));
+            };
+
+            instructions
+        }
+    }
 }
 
 pub fn ast_statement_to_tacky(
@@ -91,10 +115,16 @@ pub fn ast_statement_to_tacky(
 ) -> Vec<Instruction> {
     let mut instructions = Vec::new();
 
-    let parser::Statement::Return(expr) = ast_statement;
-    let expr_value = ast_expression_to_tacky(expr, &mut instructions, symbol_table);
-
-    instructions.push(Instruction::Return(expr_value));
+    match ast_statement {
+        parser::Statement::Return(e) => {
+            let value = ast_expression_to_tacky(e, &mut instructions, symbol_table);
+            instructions.push(Instruction::Return(value));
+        }
+        parser::Statement::Expression(e) => {
+            ast_expression_to_tacky(e, &mut instructions, symbol_table);
+        }
+        parser::Statement::Null => {}
+    }
 
     instructions
 }
@@ -164,6 +194,17 @@ pub fn ast_expression_to_tacky(
                 dst
             }
         },
+        parser::Expr::Var(identifier) => Val::Var(identifier.to_string()),
+        parser::Expr::Assignment(left, right) => {
+            let parser::Expr::Var(v) = left.as_ref() else {
+                panic!("Expected var on left hand side of assignment.")
+            };
+
+            let value = ast_expression_to_tacky(right, instructions, symbol_table);
+            let dst = Val::Var(v.clone());
+            instructions.push(Instruction::Copy(value, dst.clone()));
+            dst
+        }
     }
 }
 

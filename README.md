@@ -3,11 +3,13 @@ C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". 
 Very much a WIP, currently in chapter 5 out of 20.
 
 TODO:
+
 - Chapter 5: Parser
 - Refactor the codegen into three files, its kinda big now.
 - The label counter should be local to the codegen pass, not part of symbol table.
 
 Backlog:
+
 - Potentially flatten some tacky to asm passes into one function rather than a gazillion.
 - Make lexer and parser work with Result's rather than just panicking for errors.
 
@@ -45,7 +47,17 @@ binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
 <binop> ::= "-" | "+" | "*" | "/" | "%" | "&&" | "||"
     | "==" | "!=" | "<" | "<=" | ">" | ">=" | "="
 <identifier> ::= ? An identifier token ?
-<int> ::= ? A constant token ?```
+<int> ::= ? A constant token ?
+```
+
+## Semantic Analysis
+
+Currently only implements variable resolution:
+
+1. Check that all variables are defined
+2. Check that variable declarations are not repeated
+3. Map each variable name to a unique value
+4. Check that assignments have valid left expressions (Var(String))
 
 ## TACKY Grammar
 ```

@@ -2,26 +2,26 @@ use crate::lexer::Token;
 use std::collections::VecDeque;
 
 // program = Program(function_definition)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Program(pub Function);
 
 // function_definition = Function(identifier name, block_item* body)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Function(pub String, pub Vec<BlockItem>);
 
 // block_item = S(statement) | D(declaration)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BlockItem {
     S(Statement),
     D(Declaration),
 }
 
 // declaration = Declaration(identifier name, exp? init)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Declaration(pub String, pub Option<Expr>);
 
 // statement = Return(exp) | Expression(exp) | Null
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Statement {
     Return(Expr),
     Expression(Expr),
@@ -33,7 +33,7 @@ pub enum Statement {
 //     | Unary(unary_operator, exp)
 //     | Binary(binary_operator, exp, exp)
 //     | Assignment(exp, exp)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     // factors
     Constant(i32),
@@ -45,7 +45,7 @@ pub enum Expr {
 }
 
 // unary_operator = Complement | Negate | Not
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UnaryOperator {
     Complement,
     Negate,
@@ -55,7 +55,7 @@ pub enum UnaryOperator {
 // binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
 //     | Equal | NotEqual | LessThan | LessOrEqual
 //     | GreaterThan | GreaterOrEqual
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BinaryOperator {
     Add,
     Subtract,

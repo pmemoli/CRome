@@ -4,12 +4,13 @@ use std::fs;
 use std::process::Command;
 use tempfile::{Builder, NamedTempFile};
 
-// mod codegen;
-// mod emission;
+mod codegen;
+mod emission;
 mod lexer;
 mod parser;
 mod symbol;
-// mod tacky;
+mod tacky;
+mod validate;
 
 #[derive(Parser)]
 #[command(name = "crab")]
@@ -68,39 +69,45 @@ fn main() -> Result<()> {
     if args.parse {
         return Ok(());
     }
-    //
-    // let tacky_ast = crate::tacky::ast_program_to_tacky(&ast, &mut symbol_table);
-    //
-    // if args.tacky {
-    //     return Ok(());
-    // }
-    //
-    // let asm_ast = crate::codegen::codegen_program(&tacky_ast, &mut symbol_table);
-    //
-    // if args.codegen {
-    //     return Ok(());
-    // }
-    //
-    // let asm_str = crate::emission::emission_program(&asm_ast);
-    //
-    // print!("\n{}", asm_str);
-    //
-    // let assembly_file = Builder::new().suffix(".s").tempfile()?;
-    // let assembly_file_path = assembly_file.path();
-    //
-    // fs::write(assembly_file_path, asm_str)?;
-    //
-    // // Runs linker
-    // let output_file = source_file.strip_suffix(".c").unwrap_or(source_file);
-    // let linker_status = Command::new("gcc")
-    //     .arg(assembly_file_path)
-    //     .arg("-o")
-    //     .arg(output_file)
-    //     .status()?;
-    //
-    // if !linker_status.success() {
-    //     bail!("Linking failed at runtime.");
-    // }
+
+    let resolved_ast = crate::validate::resolve_program(&ast, &mut symbol_table);
+
+    if args.validate {
+        return Ok(());
+    }
+
+    let tacky_ast = crate::tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
+
+    println!("{:#?}", tacky_ast);
+
+    if args.tacky {
+        return Ok(());
+    }
+
+    let asm_ast = crate::codegen::codegen_program(&tacky_ast, &mut symbol_table);
+
+    if args.codegen {
+        return Ok(());
+    }
+
+    let asm_str = crate::emission::emission_program(&asm_ast);
+
+    let assembly_file = Builder::new().suffix(".s").tempfile()?;
+    let assembly_file_path = assembly_file.path();
+
+    fs::write(assembly_file_path, asm_str)?;
+
+    // Runs linker
+    let output_file = source_file.strip_suffix(".c").unwrap_or(source_file);
+    let linker_status = Command::new("gcc")
+        .arg(assembly_file_path)
+        .arg("-o")
+        .arg(output_file)
+        .status()?;
+
+    if !linker_status.success() {
+        bail!("Linking failed at runtime.");
+    }
 
     Ok(())
 }
