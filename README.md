@@ -1,6 +1,6 @@
 C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". The project is just the the preprocessed C to ASM compiler. Preprocessor and Linker comes from gcc. 
 
-Very much a WIP, currently in chapter 5 out of 20.
+Very much a WIP, currently in chapter 6 out of 20.
 
 TODO:
 
@@ -23,12 +23,16 @@ program = Program(function_definition)
 function_definition = Function(identifier name, block_item* body)
 block_item = S(statement) | D(declaration)
 declaration = Declaration(identifier name, exp? init)
-statement = Return(exp) | Expression(exp) | Null
+statement = Return(exp)
+    | Expression(exp)
+    | If(exp condition, statement then, statement? else)
+    | Null
 exp = Constant(int)
     | Var(identifier)
     | Unary(unary_operator, exp)
     | Binary(binary_operator, exp, exp)
     | Assignment(exp, exp)
+    | Conditional(exp condition, exp, exp)
 unary_operator = Complement | Negate | Not
 binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
     | Equal | NotEqual | LessThan | LessOrEqual | GreaterThan | GreaterOrEqual
@@ -40,8 +44,11 @@ binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
 <function> ::= "int" <identifier> "(" "void" ")" "{" { <block-item> } "}"
 <block-item> ::= <statement> | <declaration>
 <declaration> ::= "int" <identifier> [ "=" <exp> ] ";"
-<statement> ::= "return" <exp> ";" | <exp> ";" | ";"
-<exp> ::= <factor> | <exp> <binop> <exp>
+<statement> ::= "return" <exp> ";"
+    | <exp> ";"
+    | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+    | ";"
+<exp> ::= <factor> | <exp> <binop> <exp> | <exp> "?" <exp> ":" <exp>
 <factor> ::= <int> | <identifier> | <unop> <factor> | "(" <exp> ")"
 <unop> ::= "-" | "~" | "!"
 <binop> ::= "-" | "+" | "*" | "/" | "%" | "&&" | "||"

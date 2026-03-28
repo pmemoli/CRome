@@ -20,11 +20,15 @@ pub enum BlockItem {
 #[derive(Debug, Clone)]
 pub struct Declaration(pub String, pub Option<Expr>);
 
-// statement = Return(exp) | Expression(exp) | Null
+// statement = Return(exp)
+//     | Expression(exp)
+//     | If(exp condition, statement then, statement? else)
+//     | Null
 #[derive(Debug, Clone)]
 pub enum Statement {
     Return(Expr),
     Expression(Expr),
+    If(Expr, Box<Statement>, Option<Box<Statement>>),
     Null,
 }
 
@@ -183,7 +187,10 @@ pub fn parse_declaration(tokens: &mut VecDeque<Token>) -> Declaration {
     Declaration(identifier, init)
 }
 
-// <statement> ::= "return" <exp> ";" | <exp> ";" | ";"
+// <statement> ::= "return" <exp> ";"
+//     | <exp> ";"
+//     | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+//     | ";"
 pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
     match peek(tokens) {
         Token::ReturnKeyword => {
@@ -195,6 +202,23 @@ pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
         Token::Semicolon => {
             take_token(tokens);
             Statement::Null
+        }
+        Token::IfKeyword => {
+            take_token(tokens);
+
+            expect(Token::OpenParenthesis, tokens);
+            let condition = parse_expr(tokens, 0);
+            expect(Token::CloseParenthesis, tokens);
+
+            let then_branch = Box::new(parse_statement(tokens));
+            let else_branch = if matches!(peek(tokens), Token::ElseKeyword) {
+                take_token(tokens);
+                Some(Box::new(parse_statement(tokens)))
+            } else {
+                None
+            };
+
+            Statement::If(condition, then_branch, else_branch)
         }
         _ => {
             let expr = parse_expr(tokens, 0);

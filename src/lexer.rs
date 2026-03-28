@@ -30,6 +30,10 @@ pub enum Token {
     GreaterThan,
     GreaterThanOrEqual,
     Equal,
+    IfKeyword,
+    ElseKeyword,
+    QuestionMark,
+    Colon,
 }
 
 pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
@@ -67,6 +71,10 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
         (Regex::new(r"^>").unwrap(), |_| Token::GreaterThan),
         (Regex::new(r"^>=").unwrap(), |_| Token::GreaterThanOrEqual),
         (Regex::new(r"^=").unwrap(), |_| Token::Equal),
+        (Regex::new(r"^if\b").unwrap(), |_| Token::IfKeyword),
+        (Regex::new(r"^else\b").unwrap(), |_| Token::ElseKeyword),
+        (Regex::new(r"^\?").unwrap(), |_| Token::QuestionMark),
+        (Regex::new(r"^:").unwrap(), |_| Token::Colon),
     ];
 
     let mut i = 0;

@@ -1,3 +1,3 @@
 #!/bin/sh
 
-./tests/test_compiler ./target/debug/crab --chapter 5
+./tests/test_compiler ./target/debug/crab --chapter 6 --stage lex
