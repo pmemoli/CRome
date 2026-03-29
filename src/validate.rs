@@ -73,6 +73,15 @@ pub fn resolve_statement(
         parser::Statement::Expression(expr) => {
             parser::Statement::Expression(resolve_expr(expr, variable_map))
         }
+        parser::Statement::If(cond, then_branch, else_branch) => {
+            let cond = resolve_expr(cond, variable_map);
+            let then_branch = resolve_statement(then_branch.as_ref(), variable_map);
+            let else_branch = else_branch
+                .as_ref()
+                .map(|stmt| Box::new(resolve_statement(stmt, variable_map)));
+
+            parser::Statement::If(cond, Box::new(then_branch), else_branch)
+        }
         parser::Statement::Null => parser::Statement::Null,
     }
 }
@@ -111,6 +120,17 @@ pub fn resolve_expr(expr: &parser::Expr, variable_map: &mut VarMap) -> parser::E
                 op.clone(),
                 Box::new(resolve_expr(left, variable_map)),
                 Box::new(resolve_expr(right, variable_map)),
+            )
+        }
+        parser::Expr::Conditional(cond, then_branch, else_branch) => {
+            let cond = cond.as_ref();
+            let then_branch = then_branch.as_ref();
+            let else_branch = else_branch.as_ref();
+
+            parser::Expr::Conditional(
+                Box::new(resolve_expr(cond, variable_map)),
+                Box::new(resolve_expr(then_branch, variable_map)),
+                Box::new(resolve_expr(else_branch, variable_map)),
             )
         }
         other => other.clone(),

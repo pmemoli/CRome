@@ -123,6 +123,29 @@ pub fn ast_statement_to_tacky(
         parser::Statement::Expression(e) => {
             ast_expression_to_tacky(e, &mut instructions, symbol_table);
         }
+        parser::Statement::If(cond_expr, then_stmt, else_stmt) => {
+            let label_idx = SymbolTable::generate_label_idx(symbol_table);
+            let cond_result = ast_expression_to_tacky(cond_expr, &mut instructions, symbol_table);
+
+            if let Some(else_stmt) = else_stmt {
+                instructions.push(Instruction::JumpIfZero(
+                    cond_result,
+                    format!("else.{}", label_idx),
+                ));
+                instructions.extend(ast_statement_to_tacky(then_stmt.as_ref(), symbol_table));
+                instructions.push(Instruction::Jump(format!("end.{}", label_idx)));
+                instructions.push(Instruction::Label(format!("else.{}", label_idx)));
+                instructions.extend(ast_statement_to_tacky(else_stmt.as_ref(), symbol_table));
+            } else {
+                instructions.push(Instruction::JumpIfZero(
+                    cond_result,
+                    format!("end.{}", label_idx),
+                ));
+                instructions.extend(ast_statement_to_tacky(then_stmt.as_ref(), symbol_table));
+            }
+
+            instructions.push(Instruction::Label(format!("end.{}", label_idx)));
+        }
         parser::Statement::Null => {}
     }
 
@@ -150,7 +173,6 @@ pub fn ast_expression_to_tacky(
                 let label_idx = SymbolTable::generate_label_idx(symbol_table);
 
                 let val_1 = ast_expression_to_tacky(left_expr, instructions, symbol_table);
-
                 if let parser::BinaryOperator::And = op {
                     instructions.push(Instruction::JumpIfZero(
                         val_1,
@@ -164,7 +186,6 @@ pub fn ast_expression_to_tacky(
                 }
 
                 let val_2 = ast_expression_to_tacky(right_expr, instructions, symbol_table);
-
                 instructions.push(Instruction::JumpIfZero(
                     val_2,
                     format!("false_result.{}", label_idx),
@@ -175,12 +196,9 @@ pub fn ast_expression_to_tacky(
 
                 instructions.push(Instruction::Label(format!("true_result.{}", label_idx)));
                 instructions.push(Instruction::Copy(Val::Constant(1), dst.clone()));
-
                 instructions.push(Instruction::Jump(format!("end.{}", label_idx)));
-
                 instructions.push(Instruction::Label(format!("false_result.{}", label_idx)));
                 instructions.push(Instruction::Copy(Val::Constant(0), dst.clone()));
-
                 instructions.push(Instruction::Label(format!("end.{}", label_idx)));
                 dst
             }
@@ -203,6 +221,28 @@ pub fn ast_expression_to_tacky(
             let value = ast_expression_to_tacky(right, instructions, symbol_table);
             let dst = Val::Var(v.clone());
             instructions.push(Instruction::Copy(value, dst.clone()));
+            dst
+        }
+        parser::Expr::Conditional(cond_expr, then_expr, else_expr) => {
+            let label_idx = SymbolTable::generate_label_idx(symbol_table);
+            let dst_name = SymbolTable::generate_variable(symbol_table);
+            let dst = Val::Var(dst_name);
+
+            let cond_value = ast_expression_to_tacky(cond_expr, instructions, symbol_table);
+            instructions.push(Instruction::JumpIfZero(
+                cond_value,
+                format!("else.{}", label_idx),
+            ));
+
+            let then_value = ast_expression_to_tacky(then_expr, instructions, symbol_table);
+            instructions.push(Instruction::Copy(then_value, dst.clone()));
+            instructions.push(Instruction::Jump(format!("end.{}", label_idx)));
+
+            instructions.push(Instruction::Label(format!("else.{}", label_idx)));
+            let else_value = ast_expression_to_tacky(else_expr, instructions, symbol_table);
+            instructions.push(Instruction::Copy(else_value, dst.clone()));
+
+            instructions.push(Instruction::Label(format!("end.{}", label_idx)));
             dst
         }
     }

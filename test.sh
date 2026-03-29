@@ -1,3 +1,4 @@
 #!/bin/sh
 
-./tests/test_compiler ./target/debug/crab --chapter 6 --stage parse
+cargo build
+./tests/test_compiler ./target/debug/crab --chapter 6
