@@ -46,6 +46,7 @@ pub enum Expr {
     // compound expressions
     Binary(BinaryOperator, Box<Expr>, Box<Expr>),
     Assignment(Box<Expr>, Box<Expr>),
+    Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
 }
 
 // unary_operator = Complement | Negate | Not
@@ -106,6 +107,7 @@ fn precedence(operator: &Token) -> i32 {
         | Token::GreaterThanOrEqual => 35,
         Token::Plus | Token::Hyphen => 45,
         Token::Asterisk | Token::ForwardSlash | Token::Percent => 50,
+        Token::QuestionMark => 3,
         Token::Equal => 1,
         _ => panic!(
             "Syntax Error: Expected a binary operator but found {:?}",
@@ -131,6 +133,7 @@ fn is_binop(token: &Token) -> bool {
             | Token::GreaterThan
             | Token::GreaterThanOrEqual
             | Token::Equal
+            | Token::QuestionMark
     )
 }
 
@@ -237,6 +240,16 @@ pub fn parse_expr(tokens: &mut VecDeque<Token>, min_prec: i32) -> Expr {
             take_token(tokens);
             let right_expr = parse_expr(tokens, precedence(&next_token));
             left_expr = Expr::Assignment(Box::new(left_expr), Box::new(right_expr));
+        } else if next_token == Token::QuestionMark {
+            take_token(tokens);
+            let middle_expr = parse_expr(tokens, 0);
+            expect(Token::Colon, tokens);
+            let right_expr = parse_expr(tokens, precedence(&next_token));
+            left_expr = Expr::Conditional(
+                Box::new(left_expr),
+                Box::new(middle_expr),
+                Box::new(right_expr),
+            );
         } else {
             let operator = parse_binop(tokens);
             let right_expr = parse_expr(tokens, precedence(&next_token) + 1);
