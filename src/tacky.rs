@@ -1,5 +1,4 @@
 use crate::symbol::SymbolTable;
-use std::collections::HashMap;
 
 use crate::parser;
 
@@ -77,12 +76,11 @@ pub fn ast_function_to_tacky(
     ast_function: &parser::Function,
     symbol_table: &mut SymbolTable,
 ) -> Function {
-    let parser::Function(identifier, block_items) = ast_function;
+    let parser::Function(identifier, block) = ast_function;
 
-    let mut instructions: Vec<_> = block_items
-        .iter()
-        .flat_map(|item| ast_block_to_tacky(item, symbol_table))
-        .collect();
+    let mut instructions = Vec::new();
+
+    ast_block_to_tacky(block, &mut instructions, symbol_table);
 
     instructions.push(Instruction::Return(Val::Constant(0)));
 
@@ -90,66 +88,78 @@ pub fn ast_function_to_tacky(
 }
 
 pub fn ast_block_to_tacky(
-    ast_block: &parser::BlockItem,
+    ast_block: &parser::Block,
+    instructions: &mut Vec<Instruction>,
     symbol_table: &mut SymbolTable,
-) -> Vec<Instruction> {
+) {
+    let parser::Block(block_items) = ast_block;
+
+    for block_item in block_items {
+        ast_block_item_to_tacky(block_item, instructions, symbol_table);
+    }
+}
+
+pub fn ast_block_item_to_tacky(
+    ast_block: &parser::BlockItem,
+    instructions: &mut Vec<Instruction>,
+    symbol_table: &mut SymbolTable,
+) {
     match ast_block {
-        parser::BlockItem::S(statement) => ast_statement_to_tacky(statement, symbol_table),
+        parser::BlockItem::S(statement) => {
+            ast_statement_to_tacky(statement, instructions, symbol_table)
+        }
         parser::BlockItem::D(declaration) => {
             let parser::Declaration(name, init) = declaration;
-            let mut instructions = Vec::new();
             if let Some(e) = init.as_ref() {
-                let value = ast_expression_to_tacky(e, &mut instructions, symbol_table);
+                let value = ast_expression_to_tacky(e, instructions, symbol_table);
                 let dst = Val::Var(name.clone());
                 instructions.push(Instruction::Copy(value, dst.clone()));
             };
-
-            instructions
         }
     }
 }
 
 pub fn ast_statement_to_tacky(
     ast_statement: &parser::Statement,
+    instructions: &mut Vec<Instruction>,
     symbol_table: &mut SymbolTable,
-) -> Vec<Instruction> {
-    let mut instructions = Vec::new();
-
+) {
     match ast_statement {
         parser::Statement::Return(e) => {
-            let value = ast_expression_to_tacky(e, &mut instructions, symbol_table);
+            let value = ast_expression_to_tacky(e, instructions, symbol_table);
             instructions.push(Instruction::Return(value));
         }
         parser::Statement::Expression(e) => {
-            ast_expression_to_tacky(e, &mut instructions, symbol_table);
+            ast_expression_to_tacky(e, instructions, symbol_table);
         }
         parser::Statement::If(cond_expr, then_stmt, else_stmt) => {
             let label_idx = SymbolTable::generate_label_idx(symbol_table);
-            let cond_result = ast_expression_to_tacky(cond_expr, &mut instructions, symbol_table);
+            let cond_result = ast_expression_to_tacky(cond_expr, instructions, symbol_table);
 
             if let Some(else_stmt) = else_stmt {
                 instructions.push(Instruction::JumpIfZero(
                     cond_result,
                     format!("else.{}", label_idx),
                 ));
-                instructions.extend(ast_statement_to_tacky(then_stmt.as_ref(), symbol_table));
+                ast_statement_to_tacky(then_stmt.as_ref(), instructions, symbol_table);
                 instructions.push(Instruction::Jump(format!("end.{}", label_idx)));
                 instructions.push(Instruction::Label(format!("else.{}", label_idx)));
-                instructions.extend(ast_statement_to_tacky(else_stmt.as_ref(), symbol_table));
+                ast_statement_to_tacky(else_stmt.as_ref(), instructions, symbol_table);
             } else {
                 instructions.push(Instruction::JumpIfZero(
                     cond_result,
                     format!("end.{}", label_idx),
                 ));
-                instructions.extend(ast_statement_to_tacky(then_stmt.as_ref(), symbol_table));
+                ast_statement_to_tacky(then_stmt.as_ref(), instructions, symbol_table);
             }
 
             instructions.push(Instruction::Label(format!("end.{}", label_idx)));
         }
+        parser::Statement::Compound(block) => {
+            ast_block_to_tacky(block, instructions, symbol_table);
+        }
         parser::Statement::Null => {}
     }
-
-    instructions
 }
 
 pub fn ast_expression_to_tacky(

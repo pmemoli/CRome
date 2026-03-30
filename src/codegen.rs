@@ -1,5 +1,4 @@
 use crate::{symbol::SymbolTable, tacky};
-use std::collections::HashMap;
 
 // program = Program(function_definition)
 #[derive(Debug)]

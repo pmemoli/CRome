@@ -34,6 +34,11 @@ pub enum Token {
     ElseKeyword,
     QuestionMark,
     Colon,
+    DoKeyword,
+    WhileKeyword,
+    ForKeyword,
+    BreakKeyword,
+    ContinueKeyword,
 }
 
 pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
@@ -75,6 +80,13 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
         (Regex::new(r"^else\b").unwrap(), |_| Token::ElseKeyword),
         (Regex::new(r"^\?").unwrap(), |_| Token::QuestionMark),
         (Regex::new(r"^:").unwrap(), |_| Token::Colon),
+        (Regex::new(r"^do\b").unwrap(), |_| Token::DoKeyword),
+        (Regex::new(r"^while\b").unwrap(), |_| Token::WhileKeyword),
+        (Regex::new(r"^for\b").unwrap(), |_| Token::ForKeyword),
+        (Regex::new(r"^break\b").unwrap(), |_| Token::BreakKeyword),
+        (Regex::new(r"^continue\b").unwrap(), |_| {
+            Token::ContinueKeyword
+        }),
     ];
 
     let mut i = 0;

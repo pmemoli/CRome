@@ -5,9 +5,13 @@ use std::collections::VecDeque;
 #[derive(Debug, Clone)]
 pub struct Program(pub Function);
 
-// function_definition = Function(identifier name, block_item* body)
+// function_definition = Function(identifier name, block body)
 #[derive(Debug, Clone)]
-pub struct Function(pub String, pub Vec<BlockItem>);
+pub struct Function(pub String, pub Block);
+
+// block = Block(block_item*)
+#[derive(Debug, Clone)]
+pub struct Block(pub Vec<BlockItem>);
 
 // block_item = S(statement) | D(declaration)
 #[derive(Debug, Clone)]
@@ -23,12 +27,14 @@ pub struct Declaration(pub String, pub Option<Expr>);
 // statement = Return(exp)
 //     | Expression(exp)
 //     | If(exp condition, statement then, statement? else)
+//     | Compound(block)
 //     | Null
 #[derive(Debug, Clone)]
 pub enum Statement {
     Return(Expr),
     Expression(Expr),
     If(Expr, Box<Statement>, Option<Box<Statement>>),
+    Compound(Block),
     Null,
 }
 
@@ -148,23 +154,31 @@ pub fn parse_program(tokens: &mut VecDeque<Token>) -> Program {
     Program(function)
 }
 
-// <function> ::= "int" <identifier> "(" "void" ")" "{" { <block-item> } "}"
+// <function> ::= "int" <identifier> "(" "void" ")" <block>
 pub fn parse_function(tokens: &mut VecDeque<Token>) -> Function {
     expect(Token::IntKeyword, tokens);
     let identifier = parse_identifier(tokens);
     expect(Token::OpenParenthesis, tokens);
     expect(Token::VoidKeyword, tokens);
     expect(Token::CloseParenthesis, tokens);
-    expect(Token::OpenBrace, tokens);
 
-    let mut function_body = Vec::new();
-    while !matches!(peek(tokens), Token::CloseBrace) {
-        let next_block_item = parse_block_item(tokens);
-        function_body.push(next_block_item);
-    }
-    take_token(tokens);
+    let function_body = parse_block(tokens);
 
     Function(identifier, function_body)
+}
+
+// <block> ::= "{" { <block-item> } "}"
+pub fn parse_block(tokens: &mut VecDeque<Token>) -> Block {
+    expect(Token::OpenBrace, tokens);
+
+    let mut block_items = Vec::new();
+    while !matches!(peek(tokens), Token::CloseBrace) {
+        let next_block_item = parse_block_item(tokens);
+        block_items.push(next_block_item);
+    }
+    expect(Token::CloseBrace, tokens);
+
+    Block(block_items)
 }
 
 // <block-item> ::= <statement> | <declaration>
@@ -193,6 +207,7 @@ pub fn parse_declaration(tokens: &mut VecDeque<Token>) -> Declaration {
 // <statement> ::= "return" <exp> ";"
 //     | <exp> ";"
 //     | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
+//     | <block>
 //     | ";"
 pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
     match peek(tokens) {
@@ -223,6 +238,7 @@ pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
 
             Statement::If(condition, then_branch, else_branch)
         }
+        Token::OpenBrace => Statement::Compound(parse_block(tokens)),
         _ => {
             let expr = parse_expr(tokens, 0);
             expect(Token::Semicolon, tokens);
