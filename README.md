@@ -78,13 +78,15 @@ Loop related statements are annotated in the semantic analysis pass.
 
 ## Semantic Analysis
 
-Currently only implements variable resolution:
-
+First pass (Variable Resolution):
 1. Map each variable name to a unique value
 2. Check that assignments have valid left expressions (Var(String))
-
 3. Check that all variables are defined in their scope
 4. Check that variable declarations are not repeated in their scope
+
+Second pass (Loop Annotation):
+1. Annotate loop nodes in the ast with a unique identifier for each corresponding loop 
+2. Check that break and continue statements live within loops 
 
 ## TACKY Grammar
 ```

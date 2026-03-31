@@ -24,10 +24,22 @@ pub enum BlockItem {
 #[derive(Debug, Clone)]
 pub struct Declaration(pub String, pub Option<Expr>);
 
+// for_init = InitDecl(declaration) | InitExp(exp?)
+#[derive(Debug, Clone)]
+pub enum ForInit {
+    InitDecl(Declaration),
+    InitExp(Option<Expr>),
+}
+
 // statement = Return(exp)
 //     | Expression(exp)
 //     | If(exp condition, statement then, statement? else)
 //     | Compound(block)
+//     | Break(identifier label)
+//     | Continue(identifier label)
+//     | While(exp condition, statement body, identifier label)
+//     | DoWhile(statement body, exp condition, identifier label)
+//     | For(for_init init, exp? condition, exp? post, statement body, identifier label)
 //     | Null
 #[derive(Debug, Clone)]
 pub enum Statement {
@@ -36,6 +48,19 @@ pub enum Statement {
     If(Expr, Box<Statement>, Option<Box<Statement>>),
     Compound(Block),
     Null,
+
+    // Loop statements
+    Break(Option<String>),
+    Continue(Option<String>),
+    While(Expr, Box<Statement>, Option<String>),
+    DoWhile(Box<Statement>, Expr, Option<String>),
+    For(
+        ForInit,
+        Option<Expr>,
+        Option<Expr>,
+        Box<Statement>,
+        Option<String>,
+    ),
 }
 
 // exp = Constant(int)
@@ -49,6 +74,7 @@ pub enum Expr {
     Constant(i32),
     Var(String),
     Unary(UnaryOperator, Box<Expr>),
+
     // compound expressions
     Binary(BinaryOperator, Box<Expr>, Box<Expr>),
     Assignment(Box<Expr>, Box<Expr>),
@@ -205,9 +231,14 @@ pub fn parse_declaration(tokens: &mut VecDeque<Token>) -> Declaration {
 }
 
 // <statement> ::= "return" <exp> ";"
-//     | <exp> ";"
-//     | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
-//     | <block>
+//     | <exp> ";" done
+//     | "if" "(" <exp> ")" <statement> [ "else" <statement> ] done
+//     | <block> done
+//     | "break" ";" done
+//     | "continue" ";" done
+//     | "while" "(" <exp> ")" <statement>
+//     | "do" <statement> "while" "(" <exp> ")" ";"
+//     | "for" "(" <for-init> [ <exp> ] ";" [ <exp> ] ")" <statement>
 //     | ";"
 pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
     match peek(tokens) {
@@ -238,11 +269,62 @@ pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
 
             Statement::If(condition, then_branch, else_branch)
         }
+        Token::BreakKeyword => {
+            take_token(tokens);
+            expect(Token::Semicolon, tokens);
+            Statement::Break(None)
+        }
+        Token::ContinueKeyword => {
+            take_token(tokens);
+            expect(Token::Semicolon, tokens);
+            Statement::Continue(None)
+        }
+        Token::WhileKeyword => {
+            take_token(tokens);
+            expect(Token::OpenParenthesis, tokens);
+            let condition_expr = parse_expr(tokens, 0);
+            expect(Token::CloseParenthesis, tokens);
+            let body_stmt = Box::new(parse_statement(tokens));
+            Statement::While(condition_expr, body_stmt, None)
+        }
+        Token::DoKeyword => {
+            take_token(tokens);
+            let body_stmt = Box::new(parse_statement(tokens));
+            expect(Token::WhileKeyword, tokens);
+            expect(Token::OpenParenthesis, tokens);
+            let condition_expr = parse_expr(tokens, 0);
+            expect(Token::CloseParenthesis, tokens);
+            expect(Token::Semicolon, tokens);
+            Statement::DoWhile(body_stmt, condition_expr, None)
+        }
+        Token::ForKeyword => {
+            take_token(tokens);
+            expect(Token::OpenParenthesis, tokens);
+            let init = parse_for_init(tokens);
+            let condition = parse_optional_expr(tokens, 0, Token::Semicolon);
+            expect(Token::Semicolon, tokens);
+            let post = parse_optional_expr(tokens, 0, Token::CloseParenthesis);
+            expect(Token::CloseParenthesis, tokens);
+            let body_stmt = Box::new(parse_statement(tokens));
+            Statement::For(init, condition, post, body_stmt, None)
+        }
         Token::OpenBrace => Statement::Compound(parse_block(tokens)),
         _ => {
             let expr = parse_expr(tokens, 0);
             expect(Token::Semicolon, tokens);
             Statement::Expression(expr)
+        }
+    }
+}
+
+// <for-init> ::= <declaration> | [ <exp> ] ";"
+pub fn parse_for_init(tokens: &mut VecDeque<Token>) -> ForInit {
+    match peek(tokens) {
+        Token::IntKeyword => ForInit::InitDecl(parse_declaration(tokens)),
+        _ => {
+            let init_expr = parse_optional_expr(tokens, 0, Token::Semicolon);
+            expect(Token::Semicolon, tokens);
+            ForInit::InitExp(init_expr)
         }
     }
 }
@@ -274,6 +356,18 @@ pub fn parse_expr(tokens: &mut VecDeque<Token>, min_prec: i32) -> Expr {
         next_token = peek(tokens).clone();
     }
     left_expr
+}
+
+pub fn parse_optional_expr(
+    tokens: &mut VecDeque<Token>,
+    min_prec: i32,
+    end_token: Token,
+) -> Option<Expr> {
+    if peek(tokens) == &end_token {
+        None
+    } else {
+        Some(parse_expr(tokens, min_prec))
+    }
 }
 
 // <factor> ::= <int> | <identifier> | <unop> <factor> | "(" <exp> ")"

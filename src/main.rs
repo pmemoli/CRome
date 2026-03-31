@@ -58,21 +58,19 @@ fn main() -> Result<()> {
 
     let content = fs::read_to_string(preprocessor_file_path)?;
 
-    let mut tokens = crate::lexer::lexical_analysis(&content);
+    let mut tokens = lexer::lexical_analysis(&content);
 
     if args.lex {
         return Ok(());
     }
 
-    let ast = crate::parser::parse_program(&mut tokens);
-
-    println!("{:#?}", ast);
+    let ast = parser::parse_program(&mut tokens);
 
     if args.parse {
         return Ok(());
     }
 
-    let resolved_ast = crate::validate::resolve_program(&ast, &mut symbol_table);
+    let resolved_ast = validate::semantic_analysis(&ast, &mut symbol_table);
 
     println!("{:#?}", resolved_ast);
 
@@ -80,7 +78,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let tacky_ast = crate::tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
+    let tacky_ast = tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
 
     println!("{:#?}", tacky_ast);
 
@@ -88,13 +86,13 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let asm_ast = crate::codegen::codegen_program(&tacky_ast, &mut symbol_table);
+    let asm_ast = codegen::codegen_program(&tacky_ast, &mut symbol_table);
 
     if args.codegen {
         return Ok(());
     }
 
-    let asm_str = crate::emission::emission_program(&asm_ast);
+    let asm_str = emission::emission_program(&asm_ast);
 
     let assembly_file = Builder::new().suffix(".s").tempfile()?;
     let assembly_file_path = assembly_file.path();

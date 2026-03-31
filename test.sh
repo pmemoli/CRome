@@ -1,4 +1,4 @@
 #!/bin/sh
 
 cargo build
-./tests/test_compiler ./target/debug/crab --chapter 8 --stage lex
+./tests/test_compiler ./target/debug/crab --chapter 8 --stage validate
