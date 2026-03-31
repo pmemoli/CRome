@@ -4,7 +4,7 @@ Very much a WIP, currently in chapter 8 out of 20.
 
 TODO:
 
-- Chapter 8.
+- Chapter 8 tacky gen.
 - Refactor the codegen into three files, its kinda big now.
 - The label counter should be local to the codegen pass, not part of symbol table.
 

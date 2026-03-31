@@ -158,6 +158,17 @@ pub fn ast_statement_to_tacky(
         parser::Statement::Compound(block) => {
             ast_block_to_tacky(block, instructions, symbol_table);
         }
+        parser::Statement::Break(identifier) => {
+            let jump_label = format!("break.{}", identifier.unwrap());
+            instructions.push(Instruction::Jump(jump_label))
+        }
+        parser::Statement::Continue(identifier) => {
+            let jump_label = format!("continue.{}", identifier.unwrap());
+            instructions.push(Instruction::Jump(jump_label))
+        }
+        //     | While(exp condition, statement body, identifier label)
+        //     | DoWhile(statement body, exp condition, identifier label)
+        //     | For(for_init init, exp? condition, exp? post, statement body, identifier label)
         parser::Statement::Null => {}
     }
 }
