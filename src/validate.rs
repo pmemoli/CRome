@@ -298,7 +298,7 @@ pub fn label_statement(
             let new_label = Some(format!("loop.{}", loop_idx));
             let labeled_body = label_statement(body_stmt.as_ref(), loop_idx, &new_label);
 
-            parser::Statement::While(cond_expr.clone(), Box::new(labeled_body), new_label)
+            parser::Statement::DoWhile(Box::new(labeled_body), cond_expr.clone(), new_label)
         }
         parser::Statement::For(init_1, init_2, init_3, body_stmt, _) => {
             *loop_idx += 1;

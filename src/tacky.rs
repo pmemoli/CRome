@@ -119,6 +119,25 @@ pub fn ast_block_item_to_tacky(
     }
 }
 
+pub fn ast_for_init_to_tacky(
+    ast_init: &parser::ForInit,
+    instructions: &mut Vec<Instruction>,
+    symbol_table: &mut SymbolTable,
+) {
+    match ast_init {
+        parser::ForInit::InitDecl(declaration) => ast_block_item_to_tacky(
+            &parser::BlockItem::D(declaration.clone()),
+            instructions,
+            symbol_table,
+        ),
+        parser::ForInit::InitExp(exp) => {
+            if let Some(e) = exp.as_ref() {
+                ast_expression_to_tacky(e, instructions, symbol_table);
+            }
+        }
+    }
+}
+
 pub fn ast_statement_to_tacky(
     ast_statement: &parser::Statement,
     instructions: &mut Vec<Instruction>,
@@ -159,16 +178,60 @@ pub fn ast_statement_to_tacky(
             ast_block_to_tacky(block, instructions, symbol_table);
         }
         parser::Statement::Break(identifier) => {
-            let jump_label = format!("break.{}", identifier.unwrap());
+            let jump_label = format!("break.{}", identifier.as_ref().unwrap());
             instructions.push(Instruction::Jump(jump_label))
         }
         parser::Statement::Continue(identifier) => {
-            let jump_label = format!("continue.{}", identifier.unwrap());
+            let jump_label = format!("continue.{}", identifier.as_ref().unwrap());
             instructions.push(Instruction::Jump(jump_label))
         }
-        //     | While(exp condition, statement body, identifier label)
-        //     | DoWhile(statement body, exp condition, identifier label)
-        //     | For(for_init init, exp? condition, exp? post, statement body, identifier label)
+        parser::Statement::While(cond_expr, body, identifier) => {
+            let identifier = identifier.as_ref();
+            let continue_label = format!("continue.{}", identifier.unwrap());
+            let break_label = format!("break.{}", identifier.unwrap());
+
+            instructions.push(Instruction::Label(continue_label.clone()));
+            let cond_result = ast_expression_to_tacky(cond_expr, instructions, symbol_table);
+            instructions.push(Instruction::JumpIfZero(cond_result, break_label.clone()));
+            ast_statement_to_tacky(body.as_ref(), instructions, symbol_table);
+            instructions.push(Instruction::Jump(continue_label));
+            instructions.push(Instruction::Label(break_label));
+        }
+        parser::Statement::DoWhile(body, cond_expr, identifier) => {
+            let identifier = identifier.as_ref();
+
+            let start_label = format!("start.{}", identifier.unwrap());
+            let continue_label = format!("continue.{}", identifier.unwrap());
+            let break_label = format!("break.{}", identifier.unwrap());
+
+            instructions.push(Instruction::Label(start_label.clone()));
+            ast_statement_to_tacky(body.as_ref(), instructions, symbol_table);
+            instructions.push(Instruction::Label(continue_label.clone()));
+            let cond_result = ast_expression_to_tacky(cond_expr, instructions, symbol_table);
+            instructions.push(Instruction::JumpIfNotZero(cond_result, start_label.clone()));
+            instructions.push(Instruction::Label(break_label.clone()));
+        }
+        parser::Statement::For(init, cond_expr, post, body, identifier) => {
+            let identifier = identifier.as_ref();
+
+            let start_label = format!("start.{}", identifier.unwrap());
+            let continue_label = format!("continue.{}", identifier.unwrap());
+            let break_label = format!("break.{}", identifier.unwrap());
+
+            ast_for_init_to_tacky(init, instructions, symbol_table);
+            instructions.push(Instruction::Label(start_label.clone()));
+            if let Some(cond_expr) = cond_expr {
+                let cond_result = ast_expression_to_tacky(cond_expr, instructions, symbol_table);
+                instructions.push(Instruction::JumpIfZero(cond_result, break_label.clone()));
+            }
+            ast_statement_to_tacky(body.as_ref(), instructions, symbol_table);
+            instructions.push(Instruction::Label(continue_label.clone()));
+            if let Some(post) = post {
+                ast_expression_to_tacky(post, instructions, symbol_table);
+            }
+            instructions.push(Instruction::Jump(start_label));
+            instructions.push(Instruction::Label(break_label));
+        }
         parser::Statement::Null => {}
     }
 }
