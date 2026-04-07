@@ -1,13 +1,24 @@
 use crate::lexer::Token;
 use std::collections::VecDeque;
 
-// program = Program(function_definition)
+// program = Program(function_declaration*)
 #[derive(Debug, Clone)]
-pub struct Program(pub Function);
+pub struct Program(pub Vec<FunctionDeclaration>);
 
-// function_definition = Function(identifier name, block body)
+// declaration = FunDecl(function_declaration) | VarDecl(variable_declaration)
 #[derive(Debug, Clone)]
-pub struct Function(pub String, pub Block);
+pub enum Declaration {
+    FunDecl(FunctionDeclaration),
+    VarDecl(VariableDeclaration),
+}
+
+// function_declaration = (identifier name, identifier* params, block? body)
+#[derive(Debug, Clone)]
+pub struct FunctionDeclaration(pub String, pub Vec<String>, pub Option<Block>);
+
+// variable_declaration = (identifier name, exp? init)
+#[derive(Debug, Clone)]
+pub struct VariableDeclaration(pub String, pub Option<Expr>);
 
 // block = Block(block_item*)
 #[derive(Debug, Clone)]
@@ -20,14 +31,10 @@ pub enum BlockItem {
     D(Declaration),
 }
 
-// declaration = Declaration(identifier name, exp? init)
-#[derive(Debug, Clone)]
-pub struct Declaration(pub String, pub Option<Expr>);
-
 // for_init = InitDecl(declaration) | InitExp(exp?)
 #[derive(Debug, Clone)]
 pub enum ForInit {
-    InitDecl(Declaration),
+    InitDecl(VariableDeclaration),
     InitExp(Option<Expr>),
 }
 
@@ -68,6 +75,8 @@ pub enum Statement {
 //     | Unary(unary_operator, exp)
 //     | Binary(binary_operator, exp, exp)
 //     | Assignment(exp, exp)
+//     | Conditional(exp condition, exp, exp)
+//     | FunctionCall(identifier, exp* args)
 #[derive(Debug, Clone)]
 pub enum Expr {
     // factors
@@ -79,6 +88,7 @@ pub enum Expr {
     Binary(BinaryOperator, Box<Expr>, Box<Expr>),
     Assignment(Box<Expr>, Box<Expr>),
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
+    FunctionCall(String, Vec<Expr>),
 }
 
 // unary_operator = Complement | Negate | Not
@@ -121,7 +131,11 @@ fn expect(expected: Token, tokens: &mut VecDeque<Token>) {
 }
 
 fn peek(tokens: &VecDeque<Token>) -> &Token {
-    tokens.front().unwrap()
+    &tokens[0]
+}
+
+fn peek_n(tokens: &VecDeque<Token>, n: usize) -> &Token {
+    &tokens[n]
 }
 
 fn take_token(tokens: &mut VecDeque<Token>) -> Token {
@@ -169,28 +183,94 @@ fn is_binop(token: &Token) -> bool {
     )
 }
 
-// <program> ::= <function>
+// <program> ::= { <function-declaration> }
 pub fn parse_program(tokens: &mut VecDeque<Token>) -> Program {
-    let function = parse_function(tokens);
+    let mut declarations = Vec::new();
+    while !tokens.is_empty() {
+        let func_declaration = parse_function_declaration(tokens);
+        declarations.push(func_declaration);
+    }
 
     if tokens.len() != 0 {
         panic!("Syntax Error: Parsed entire program but some tokens remain");
     }
 
-    Program(function)
+    Program(declarations)
 }
 
-// <function> ::= "int" <identifier> "(" "void" ")" <block>
-pub fn parse_function(tokens: &mut VecDeque<Token>) -> Function {
+// <declaration> ::= <variable-declaration> | <function-declaration>
+pub fn parse_declaration(tokens: &mut VecDeque<Token>) -> Declaration {
+    match peek_n(tokens, 2) {
+        Token::Equal | Token::Semicolon => {
+            let declaration = parse_variable_declaration(tokens);
+            Declaration::VarDecl(declaration)
+        }
+        Token::OpenParenthesis => {
+            let declaration = parse_function_declaration(tokens);
+            Declaration::FunDecl(declaration)
+        }
+        _ => panic!("Expected =, ; or ( after declaration"),
+    }
+}
+
+// <variable-declaration> ::= "int" <identifier> [ "=" <exp> ] ";"
+pub fn parse_variable_declaration(tokens: &mut VecDeque<Token>) -> VariableDeclaration {
+    expect(Token::IntKeyword, tokens);
+    let identifier = parse_identifier(tokens);
+    let init = if matches!(peek(tokens), Token::Equal) {
+        take_token(tokens);
+        Some(parse_expr(tokens, 0))
+    } else {
+        None
+    };
+    expect(Token::Semicolon, tokens);
+
+    VariableDeclaration(identifier, init)
+}
+
+// <function-declaration> ::= "int" <identifier> "(" <param-list> ")" ( <block> | ";")
+pub fn parse_function_declaration(tokens: &mut VecDeque<Token>) -> FunctionDeclaration {
     expect(Token::IntKeyword, tokens);
     let identifier = parse_identifier(tokens);
     expect(Token::OpenParenthesis, tokens);
-    expect(Token::VoidKeyword, tokens);
+    let param_list = parse_param_list(tokens);
     expect(Token::CloseParenthesis, tokens);
 
-    let function_body = parse_block(tokens);
+    match peek(tokens) {
+        Token::OpenBrace => {
+            let block = parse_block(tokens);
+            FunctionDeclaration(identifier, param_list, Some(block))
+        }
+        Token::Semicolon => {
+            take_token(tokens);
+            FunctionDeclaration(identifier, param_list, None)
+        }
+        _ => panic!("Expected semicolon or definition after function definition"),
+    }
+}
 
-    Function(identifier, function_body)
+// <param-list> ::= eps | "void" | "int" <identifier> { "," "int" <identifier> }
+pub fn parse_param_list(tokens: &mut VecDeque<Token>) -> Vec<String> {
+    let mut param_list = Vec::new();
+    match peek(tokens) {
+        Token::IntKeyword => {
+            take_token(tokens);
+            param_list.push(parse_identifier(tokens));
+
+            while matches!(peek(tokens), Token::Comma) {
+                take_token(tokens);
+                expect(Token::IntKeyword, tokens);
+                param_list.push(parse_identifier(tokens));
+            }
+        }
+        Token::VoidKeyword => {
+            take_token(tokens);
+        }
+        Token::CloseParenthesis => {}
+        _ => panic!("Expected 'void' or parameter list in function declaration"),
+    }
+
+    param_list
 }
 
 // <block> ::= "{" { <block-item> } "}"
@@ -213,21 +293,6 @@ pub fn parse_block_item(tokens: &mut VecDeque<Token>) -> BlockItem {
         Token::IntKeyword => BlockItem::D(parse_declaration(tokens)),
         _ => BlockItem::S(parse_statement(tokens)),
     }
-}
-
-// <declaration> ::= "int" <identifier> [ "=" <exp> ] ";"
-pub fn parse_declaration(tokens: &mut VecDeque<Token>) -> Declaration {
-    expect(Token::IntKeyword, tokens);
-    let identifier = parse_identifier(tokens);
-    let init = if matches!(peek(tokens), Token::Equal) {
-        take_token(tokens);
-        Some(parse_expr(tokens, 0))
-    } else {
-        None
-    };
-    expect(Token::Semicolon, tokens);
-
-    Declaration(identifier, init)
 }
 
 // <statement> ::= "return" <exp> ";"
@@ -320,7 +385,7 @@ pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
 // <for-init> ::= <declaration> | [ <exp> ] ";"
 pub fn parse_for_init(tokens: &mut VecDeque<Token>) -> ForInit {
     match peek(tokens) {
-        Token::IntKeyword => ForInit::InitDecl(parse_declaration(tokens)),
+        Token::IntKeyword => ForInit::InitDecl(parse_variable_declaration(tokens)),
         _ => {
             let init_expr = parse_optional_expr(tokens, 0, Token::Semicolon);
             expect(Token::Semicolon, tokens);
@@ -371,6 +436,7 @@ pub fn parse_optional_expr(
 }
 
 // <factor> ::= <int> | <identifier> | <unop> <factor> | "(" <exp> ")"
+//     | <identifier> "(" [ <argument-list> ] ")"
 pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
     match peek(tokens) {
         Token::Constant(i) => {
@@ -389,13 +455,40 @@ pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
             expect(Token::CloseParenthesis, tokens);
             inner_expr
         }
-        Token::Identifier(s) => {
-            let expr = Expr::Var(s.to_string());
-            take_token(tokens);
-            expr
-        }
+        Token::Identifier(s) => match peek_n(tokens, 1) {
+            Token::OpenParenthesis => {
+                let func_name = s.to_string();
+                take_token(tokens);
+                take_token(tokens);
+                let arguments = parse_argument_list(tokens);
+                expect(Token::CloseParenthesis, tokens);
+                Expr::FunctionCall(func_name, arguments)
+            }
+            _ => {
+                let expr = Expr::Var(s.to_string());
+                take_token(tokens);
+                expr
+            }
+        },
         _ => panic!("Malformed Expression"),
     }
+}
+
+// <argument-list> ::= <exp> { "," <exp> }
+pub fn parse_argument_list(tokens: &mut VecDeque<Token>) -> Vec<Expr> {
+    let mut arguments = Vec::new();
+    if matches!(peek(tokens), Token::CloseParenthesis) {
+        return arguments;
+    }
+
+    arguments.push(parse_expr(tokens, 0));
+
+    while matches!(peek(tokens), Token::Comma) {
+        take_token(tokens);
+        arguments.push(parse_expr(tokens, 0));
+    }
+
+    arguments
 }
 
 // <unop> ::= "-" | "~" | "!"

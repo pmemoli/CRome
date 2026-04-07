@@ -19,12 +19,13 @@ Backlog:
 
 ## AST Specification
 ```
-program = Program(function_definition)
-function_definition = Function(identifier name, block body)
+program = Program(function_declaration*)
+declaration = FunDecl(function_declaration) | VarDecl(variable_declaration)
+variable_declaration = (identifier name, exp? init)
+function_declaration = (identifier name, identifier* params, block? body)
 block = Block(block_item*)
 block_item = S(statement) | D(declaration)
-declaration = Declaration(identifier name, exp? init)
-for_init = InitDecl(declaration) | InitExp(exp?)
+for_init = InitDecl(variable_declaration) | InitExp(exp?)
 statement = Return(exp)
     | Expression(exp)
     | If(exp condition, statement then, statement? else)
@@ -41,6 +42,7 @@ exp = Constant(int)
     | Binary(binary_operator, exp, exp)
     | Assignment(exp, exp)
     | Conditional(exp condition, exp, exp)
+    | FunctionCall(identifier, exp* args)
 unary_operator = Complement | Negate | Not
 binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
     | Equal | NotEqual | LessThan | LessOrEqual
@@ -51,12 +53,15 @@ Loop related statements are annotated in the semantic analysis pass.
 
 ## Formal Grammar
 ```
-<program> ::= <function>
-<function> ::= "int" <identifier> "(" "void" ")" <block>
+<program> ::= { <function-declaration> }
+<declaration> ::= <variable-declaration> | <function-declaration>
+<variable-declaration> ::= "int" <identifier> [ "=" <exp> ] ";"
+<function-declaration> ::= "int" <identifier> "(" <param-list> ")" ( <block> | ";")
+<param-list> ::= "void" | "int" <identifier> { "," "int" <identifier> }
 <block> ::= "{" { <block-item> } "}"
 <block-item> ::= <statement> | <declaration>
 <declaration> ::= "int" <identifier> [ "=" <exp> ] ";"
-<for-init> ::= <declaration> | [ <exp> ] ";"
+<for-init> ::= <variable-declaration> | [ <exp> ] ";"
 <statement> ::= "return" <exp> ";"
     | <exp> ";"
     | "if" "(" <exp> ")" <statement> [ "else" <statement> ]
@@ -69,6 +74,8 @@ Loop related statements are annotated in the semantic analysis pass.
     | ";"
 <exp> ::= <factor> | <exp> <binop> <exp> | <exp> "?" <exp> ":" <exp>
 <factor> ::= <int> | <identifier> | <unop> <factor> | "(" <exp> ")"
+    | <identifier> "(" [ <argument-list> ] ")"
+<argument-list> ::= <exp> { "," <exp> }
 <unop> ::= "-" | "~" | "!"
 <binop> ::= "-" | "+" | "*" | "/" | "%" | "&&" | "||"
     | "==" | "!=" | "<" | "<=" | ">" | ">=" | "="

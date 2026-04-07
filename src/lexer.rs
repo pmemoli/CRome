@@ -39,6 +39,7 @@ pub enum Token {
     ForKeyword,
     BreakKeyword,
     ContinueKeyword,
+    Comma,
 }
 
 pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
@@ -87,6 +88,7 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
         (Regex::new(r"^continue\b").unwrap(), |_| {
             Token::ContinueKeyword
         }),
+        (Regex::new(r"^,").unwrap(), |_| Token::Comma),
     ];
 
     let mut i = 0;
