@@ -1,4 +1,4 @@
-dev:
+run:
 	cargo run main.c
 
 test:

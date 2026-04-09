@@ -4,8 +4,7 @@ Very much a WIP, currently in chapter 9 out of 20.
 
 TODO:
 
-- Refactor first semantic pass to not use the symbol table and rather an index to create unique names.
-- Chapter 9.
+- Chapter 9 semantic analysis.
 - Refactor the codegen into three files, its kinda big now.
 - The label counter should be local to the codegen pass, not part of symbol table.
 
@@ -108,11 +107,9 @@ Loop related statements are annotated in the semantic analysis pass.
 
 ### Third pass (Type Checking):
 
-1. Check that declarations are consistent within their scope:
-    - Check that variables are not declared with the same name as a function.
-    - Check that functions declarations are consistent.
+1. Check that function declarations are consistent everywhere.
 2. A function can't be called with the wrong number of arguments.
-3. A function can't be defined more than once.
+3. A function can't be defined more than once (not really type checking but easy to implement here).
 
 This step also builds the symbol table, including stack offsets. 
 

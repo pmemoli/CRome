@@ -1,6 +1,6 @@
-int main() {
-    int a();
-    int a;
+int foo(int b, int c);
 
-    return 1;
+int main(void) {
+    int foo(int a);
+    return foo(1);
 }
