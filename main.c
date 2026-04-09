@@ -1,5 +1,6 @@
-int a(void) { return 1; }
+int main() {
+    int a();
+    int a;
 
-int b(int a) { return a; }
-
-int main() { return a(); }
+    return 1;
+}

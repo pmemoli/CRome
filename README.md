@@ -4,6 +4,7 @@ Very much a WIP, currently in chapter 9 out of 20.
 
 TODO:
 
+- Refactor first semantic pass to not use the symbol table and rather an index to create unique names.
 - Chapter 9.
 - Refactor the codegen into three files, its kinda big now.
 - The label counter should be local to the codegen pass, not part of symbol table.
@@ -85,15 +86,35 @@ Loop related statements are annotated in the semantic analysis pass.
 
 ## Semantic Analysis
 
-First pass (Variable Resolution):
-1. Map each variable name to a unique value
-2. Check that assignments have valid left expressions (Var(String))
+### First pass (Identifier Resolution):
+
+#### Variables:
+
+1. Map each variable name to a unique value 
+2. Check that variable assignments have valid left expressions (Var(String))
 3. Check that all variables are defined in their scope
 4. Check that variable declarations are not repeated in their scope
 
-Second pass (Loop Annotation):
+#### Functions (external linkage):
+
+1. Check that all function calls refer to declared functions in their scope
+2. Check that functions and variables are not declared with SAME name in the SAME scope
+3. Check that definitions of functions do not live within other functions.
+
+### Second pass (Loop Annotation):
+
 1. Annotate loop nodes in the ast with a unique identifier for each corresponding loop 
 2. Check that break and continue statements live within loops 
+
+### Third pass (Type Checking):
+
+1. Check that declarations are consistent within their scope:
+    - Check that variables are not declared with the same name as a function.
+    - Check that functions declarations are consistent.
+2. A function can't be called with the wrong number of arguments.
+3. A function can't be defined more than once.
+
+This step also builds the symbol table, including stack offsets. 
 
 ## TACKY Grammar
 ```
@@ -140,3 +161,5 @@ reg = AX | DX | R10 | R11
 1. Convert tacky to asm (refers to temp vars directly with Pseudo(identifier))
 2. Replace pseudoregisters with concrete addresses in the stack with Stack(int)
 3. Fix up instructions so that src and dst operands are not both memory addresses
+
+

@@ -31,7 +31,7 @@ pub enum BlockItem {
     D(Declaration),
 }
 
-// for_init = InitDecl(declaration) | InitExp(exp?)
+// for_init = InitDecl(variable_declaration) | InitExp(exp?)
 #[derive(Debug, Clone)]
 pub enum ForInit {
     InitDecl(VariableDeclaration),

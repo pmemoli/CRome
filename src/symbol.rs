@@ -1,43 +1,57 @@
 use std::collections::HashMap;
 
-pub struct SymbolInfo {
-    pub stack_offset: u32, // Currently each variable takes 4 bytes
+pub enum Type {
+    Int,
+    FunType(u32), // Number of parameters
+}
+
+pub enum SymbolInfo {
+    Variable {
+        stack_offset: u32, // Currently each variable takes 4 bytes
+        ty: Type,
+    },
+    Function {
+        param_count: u32,
+        return_ty: Type,
+        defined: bool,
+    },
 }
 
 pub struct SymbolTable {
     map: HashMap<String, SymbolInfo>,
-    label_idx_counter: u32,
 }
 
 impl SymbolTable {
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
-            label_idx_counter: 0,
         }
     }
 
     pub fn generate_variable(&mut self) -> String {
-        let info = SymbolInfo {
-            stack_offset: (self.map.len() + 1) as u32 * 4,
+        // stack offset is calculated based on the number of variables already in the map
+        let var_count = self
+            .map
+            .values()
+            .filter(|s| matches!(s, SymbolInfo::Variable { .. }))
+            .count();
+
+        let info = SymbolInfo::Variable {
+            stack_offset: (var_count + 1) as u32 * 4,
+            ty: Type::Int,
         };
         let name = format!("var.{}", self.map.len());
         self.map.insert(name.clone(), info);
         name
     }
 
-    pub fn generate_label_idx(&mut self) -> u32 {
-        self.label_idx_counter += 1;
-        self.label_idx_counter
-    }
-
     pub fn stack_size(&self) -> u32 {
-        (self.map.len() as u32) * 4
-    }
+        let var_count = self
+            .map
+            .values()
+            .filter(|s| matches!(s, SymbolInfo::Variable { .. }))
+            .count();
 
-    pub fn get(&self, name: &str) -> &SymbolInfo {
-        self.map
-            .get(name)
-            .expect(&format!("Variable {} not found in symbol table", name))
+        (var_count as u32) * 4
     }
 }
