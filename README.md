@@ -4,7 +4,7 @@ Very much a WIP, currently in chapter 9 out of 20.
 
 TODO:
 
-- Chapter 9 semantic analysis.
+- Chapter 9 codegen.
 - Refactor the codegen into three files, its kinda big now.
 - The label counter should be local to the codegen pass, not part of symbol table.
 
@@ -89,7 +89,7 @@ Loop related statements are annotated in the semantic analysis pass.
 
 #### Variables:
 
-1. Map each variable name to a unique value 
+1. Map each variable name to a unique value and adds to symbol table 
 2. Check that variable assignments have valid left expressions (Var(String))
 3. Check that all variables are defined in their scope
 4. Check that variable declarations are not repeated in their scope
@@ -107,33 +107,27 @@ Loop related statements are annotated in the semantic analysis pass.
 
 ### Third pass (Type Checking):
 
-1. Check that function declarations are consistent everywhere.
-2. A function can't be called with the wrong number of arguments.
-3. A function can't be defined more than once (not really type checking but easy to implement here).
-
-This step also builds the symbol table, including stack offsets. 
+1. Check that function declarations are consistent everywhere, and adds name to symbol table
+2. A function can't be called with the wrong number of arguments
+3. A function can't be defined more than once (not really type checking but easy to implement here)
 
 ## TACKY Grammar
 ```
-program = Program(function_definition)
-function_definition = Function(identifier name, instruction* instructions)
-instruction = Mov(operand src, operand dst)
-    | Unary(unary_operator, operand)
-    | Binary(binary_operator, operand, operand)
-    | Cmp(operand, operand)
-    | Idiv(operand)
-    | Cdq
-    | Jmp(identifier)
-    | JmpCC(cond_code, identifier)
-    | SetCC(cond_code, operand)
+program = Program(function_definition*)
+function_definition = Function(identifier, identifier* params, instruction* body)
+instruction = Return(val)
+    | Unary(unary_operator, val src, val dst)
+    | Binary(binary_operator, val src1, val src2, val dst)
+    | Copy(val src, val dst)
+    | Jump(identifier target)
+    | JumpIfZero(val condition, identifier target)
+    | JumpIfNotZero(val condition, identifier target)
     | Label(identifier)
-    | AllocateStack(int)
-    | Ret
-unary_operator = Neg | Not
-binary_operator = Add | Sub | Mult
-operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int)
-cond_code = E | NE | G | GE | L | LE
-reg = AX | DX | R10 | R11
+    | FunCall(identifier fun_name, val* args, val dst)
+val = Constant(int) | Var(identifier)
+unary_operator = Complement | Negate | Not
+binary_operator = Add | Subtract | Multiply | Divide | Remainder | Equal | NotEqual
+    | LessThan | LessOrEqual | GreaterThan | GreaterOrEqual
 ```
 
 ## ASM Grammar

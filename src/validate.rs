@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     parser,
-    symbol::{SymbolInfo, SymbolTable, Type},
+    symbol::{SymbolMetadata, SymbolTable, Type},
 };
 
 // First pass: Variable resolution
@@ -11,11 +11,6 @@ pub struct IdentifierInfo {
     new_name: String,
     declared_in_scope: bool,
     has_linkage: bool,
-}
-
-fn generate_variable(i: &mut u32) -> String {
-    *i += 1;
-    format!("var.{}", i)
 }
 
 type IdentifierMap = HashMap<String, IdentifierInfo>;
@@ -30,9 +25,11 @@ pub fn new_scope_identifier_map(identifier_map: &IdentifierMap) -> IdentifierMap
     new_identifier_map
 }
 
-pub fn resolve_program(program: &parser::Program) -> parser::Program {
+pub fn resolve_program(
+    program: &parser::Program,
+    symbol_table: &mut SymbolTable,
+) -> parser::Program {
     let mut identifier_map = IdentifierMap::new();
-    let mut var_index = 0;
 
     let parser::Program(declarations) = program;
     let mut new_declarations = Vec::new();
@@ -40,7 +37,7 @@ pub fn resolve_program(program: &parser::Program) -> parser::Program {
         new_declarations.push(resolve_function_declaration(
             declaration,
             &mut identifier_map,
-            &mut var_index,
+            symbol_table,
         ))
     }
 
@@ -50,11 +47,11 @@ pub fn resolve_program(program: &parser::Program) -> parser::Program {
 pub fn resolve_declaration(
     declaration: &parser::Declaration,
     identifier_map: &mut IdentifierMap,
-    var_index: &mut u32,
+    symbol_table: &mut SymbolTable,
 ) -> parser::Declaration {
     match declaration {
         parser::Declaration::VarDecl(var_decl) => parser::Declaration::VarDecl(
-            resolve_variable_declaration(var_decl, identifier_map, var_index),
+            resolve_variable_declaration(var_decl, identifier_map, symbol_table),
         ),
         parser::Declaration::FunDecl(func_decl) => {
             let parser::FunctionDeclaration(_, _, init) = func_decl;
@@ -68,7 +65,7 @@ pub fn resolve_declaration(
             parser::Declaration::FunDecl(resolve_function_declaration(
                 func_decl,
                 identifier_map,
-                var_index,
+                symbol_table,
             ))
         }
     }
@@ -77,13 +74,13 @@ pub fn resolve_declaration(
 pub fn resolve_block(
     block: &parser::Block,
     identifier_map: &mut IdentifierMap,
-    var_index: &mut u32,
+    symbol_table: &mut SymbolTable,
 ) -> parser::Block {
     let parser::Block(block_items) = block;
-    let resolved_block_items = block_items
-        .iter()
-        .map(|item| resolve_block_item(item, identifier_map, var_index))
-        .collect();
+    let mut resolved_block_items = Vec::new();
+    for item in block_items {
+        resolved_block_items.push(resolve_block_item(item, identifier_map, symbol_table));
+    }
 
     parser::Block(resolved_block_items)
 }
@@ -91,14 +88,14 @@ pub fn resolve_block(
 pub fn resolve_block_item(
     block_item: &parser::BlockItem,
     identifier_map: &mut IdentifierMap,
-    var_index: &mut u32,
+    symbol_table: &mut SymbolTable,
 ) -> parser::BlockItem {
     match block_item {
         parser::BlockItem::D(declaration) => {
-            parser::BlockItem::D(resolve_declaration(declaration, identifier_map, var_index))
+            parser::BlockItem::D(resolve_declaration(declaration, identifier_map, symbol_table))
         }
         parser::BlockItem::S(statement) => {
-            parser::BlockItem::S(resolve_statement(statement, identifier_map, var_index))
+            parser::BlockItem::S(resolve_statement(statement, identifier_map, symbol_table))
         }
     }
 }
@@ -106,7 +103,7 @@ pub fn resolve_block_item(
 pub fn resolve_variable_declaration(
     declaration: &parser::VariableDeclaration,
     identifier_map: &mut IdentifierMap,
-    var_index: &mut u32,
+    symbol_table: &mut SymbolTable,
 ) -> parser::VariableDeclaration {
     let parser::VariableDeclaration(name, init) = declaration;
 
@@ -116,7 +113,7 @@ pub fn resolve_variable_declaration(
         }
     }
 
-    let new_name = generate_variable(var_index);
+    let new_name = symbol_table.generate_variable();
     identifier_map.insert(
         name.clone(),
         IdentifierInfo {
@@ -134,7 +131,7 @@ pub fn resolve_variable_declaration(
 pub fn resolve_function_declaration(
     declaration: &parser::FunctionDeclaration,
     identifier_map: &mut IdentifierMap,
-    var_index: &mut u32,
+    symbol_table: &mut SymbolTable,
 ) -> parser::FunctionDeclaration {
     let parser::FunctionDeclaration(name, parameters, body) = declaration;
 
@@ -159,12 +156,12 @@ pub fn resolve_function_declaration(
     let mut inner_map = new_scope_identifier_map(identifier_map);
     let mut new_params = Vec::new();
     for parameter in parameters {
-        new_params.push(resolve_parameter(parameter, &mut inner_map, var_index));
+        new_params.push(resolve_parameter(parameter, &mut inner_map, symbol_table));
     }
 
     match body {
         Some(block) => {
-            let new_body = resolve_block(block, &mut inner_map, var_index);
+            let new_body = resolve_block(block, &mut inner_map, symbol_table);
             parser::FunctionDeclaration(name.clone(), new_params, Some(new_body))
         }
         None => parser::FunctionDeclaration(name.clone(), new_params, None),
@@ -174,7 +171,7 @@ pub fn resolve_function_declaration(
 pub fn resolve_parameter(
     parameter_name: &String,
     identifier_map: &mut IdentifierMap,
-    var_index: &mut u32,
+    symbol_table: &mut SymbolTable,
 ) -> String {
     if let Some(identifier_info) = identifier_map.get(parameter_name) {
         if identifier_info.declared_in_scope {
@@ -182,7 +179,7 @@ pub fn resolve_parameter(
         }
     }
 
-    let new_name = generate_variable(var_index);
+    let new_name = symbol_table.generate_variable();
     identifier_map.insert(
         parameter_name.clone(),
         IdentifierInfo {
@@ -198,7 +195,7 @@ pub fn resolve_parameter(
 pub fn resolve_statement(
     statement: &parser::Statement,
     variable_map: &mut IdentifierMap,
-    var_index: &mut u32,
+    symbol_table: &mut SymbolTable,
 ) -> parser::Statement {
     match statement {
         parser::Statement::Return(expr) => {
@@ -209,35 +206,35 @@ pub fn resolve_statement(
         }
         parser::Statement::If(cond, then_branch, else_branch) => {
             let cond = resolve_expr(cond, variable_map);
-            let then_branch = resolve_statement(then_branch.as_ref(), variable_map, var_index);
+            let then_branch = resolve_statement(then_branch.as_ref(), variable_map, symbol_table);
             let else_branch = else_branch
                 .as_ref()
-                .map(|stmt| Box::new(resolve_statement(stmt, variable_map, var_index)));
+                .map(|stmt| Box::new(resolve_statement(stmt, variable_map, symbol_table)));
 
             parser::Statement::If(cond, Box::new(then_branch), else_branch)
         }
         parser::Statement::Compound(block) => {
             let mut new_variable_map = new_scope_identifier_map(variable_map);
-            let resolved_block = resolve_block(block, &mut new_variable_map, var_index);
+            let resolved_block = resolve_block(block, &mut new_variable_map, symbol_table);
             parser::Statement::Compound(resolved_block)
         }
         parser::Statement::While(cond, body, label) => {
             let cond = resolve_expr(cond, variable_map);
-            let body = resolve_statement(body.as_ref(), variable_map, var_index);
+            let body = resolve_statement(body.as_ref(), variable_map, symbol_table);
             parser::Statement::While(cond, Box::new(body), label.clone())
         }
         parser::Statement::DoWhile(body, cond, label) => {
-            let body = resolve_statement(body.as_ref(), variable_map, var_index);
+            let body = resolve_statement(body.as_ref(), variable_map, symbol_table);
             let cond = resolve_expr(cond, variable_map);
             parser::Statement::DoWhile(Box::new(body), cond, label.clone())
         }
         parser::Statement::For(for_init, opt_cond, opt_post, body, label) => {
             let mut new_variable_map = new_scope_identifier_map(variable_map);
 
-            let for_init = resolve_for_init(for_init, &mut new_variable_map, var_index);
+            let for_init = resolve_for_init(for_init, &mut new_variable_map, symbol_table);
             let opt_cond = resolve_optional_expr(opt_cond, &mut new_variable_map);
             let opt_post = resolve_optional_expr(opt_post, &mut new_variable_map);
-            let body = resolve_statement(body.as_ref(), &mut new_variable_map, var_index);
+            let body = resolve_statement(body.as_ref(), &mut new_variable_map, symbol_table);
 
             parser::Statement::For(for_init, opt_cond, opt_post, Box::new(body), label.clone())
         }
@@ -248,11 +245,11 @@ pub fn resolve_statement(
 pub fn resolve_for_init(
     for_init: &parser::ForInit,
     variable_map: &mut IdentifierMap,
-    var_index: &mut u32,
+    symbol_table: &mut SymbolTable,
 ) -> parser::ForInit {
     match for_init {
         parser::ForInit::InitDecl(decl) => {
-            parser::ForInit::InitDecl(resolve_variable_declaration(decl, variable_map, var_index))
+            parser::ForInit::InitDecl(resolve_variable_declaration(decl, variable_map, symbol_table))
         }
         parser::ForInit::InitExp(opt_expr) => {
             parser::ForInit::InitExp(resolve_optional_expr(opt_expr, variable_map))
@@ -454,12 +451,30 @@ pub fn label_statement(
 }
 
 // Third pass: Type checking
+pub fn typecheck_program(program: &parser::Program, symbol_table: &mut SymbolTable) {
+    let parser::Program(declarations) = program;
+    let mut new_declarations = Vec::new();
+    for declaration in declarations {
+        new_declarations.push(typecheck_function_declaration(declaration, symbol_table))
+    }
+}
+
+pub fn typecheck_declaration(declaration: &parser::Declaration, symbol_table: &mut SymbolTable) {
+    match declaration {
+        parser::Declaration::VarDecl(var_decl) => {
+            typecheck_variable_declaration(var_decl, symbol_table);
+        }
+        parser::Declaration::FunDecl(func_decl) => {
+            typecheck_function_declaration(func_decl, symbol_table);
+        }
+    }
+}
+
 pub fn typecheck_variable_declaration(
     variable_declaration: &parser::VariableDeclaration,
     symbol_table: &mut SymbolTable,
 ) {
-    let parser::VariableDeclaration(name, init) = variable_declaration;
-    symbol_table.generate_variable(name);
+    let parser::VariableDeclaration(_name, init) = variable_declaration;
     if let Some(e) = init.as_ref() {
         typecheck_expr(e, symbol_table);
     }
@@ -470,57 +485,151 @@ pub fn typecheck_function_declaration(
     symbol_table: &mut SymbolTable,
 ) {
     let parser::FunctionDeclaration(name, parameters, body) = function_declaration;
-    let og_type = Type::FunType(parameters.len());
     let mut already_defined = false;
 
     // Check that function declarations are consistent everywhere.
     // Check that the function is not defined more than once.
     if let Some(symbol_info) = symbol_table.map.get(name) {
-        if let SymbolInfo::Function { ty, defined } = symbol_info {
-            if ty != &og_type {
-                panic!("Incompatible declarations")
-            }
-
-            already_defined = *defined;
-            if *defined && body.is_some() {
-                panic!("Function defined twice")
-            }
-        } else {
+        if symbol_info.ty != Type::FunType(parameters.len()) {
             panic!("Incompatible declarations")
+        }
+
+        match symbol_info.metadata {
+            SymbolMetadata::Function { defined } => {
+                already_defined = defined;
+                if defined && body.is_some() {
+                    panic!("Function defined twice");
+                }
+            }
+            _ => panic!("Incompatible declarations"),
         }
     }
 
     symbol_table.generate_function(name, parameters.len(), body.is_some() || already_defined);
 
     if let Some(block) = body.as_ref() {
-        // Only generate names for defined functions
-        for param_name in parameters {
-            symbol_table.generate_variable(param_name);
-        }
         typecheck_block(block, symbol_table);
     }
 }
 
-// typecheck_exp(e, symbols):
-// match e with
-// | FunctionCall(f, args) ->
-// f_type = symbols.get(f).type
-// 1 if f_type == Int:
-// fail("Variable used as function name")
-// 2 if f_type.param_count != length(args):
-// fail("Function called with the wrong number of arguments")
-// 3 for arg in args:
-// typecheck_exp(arg, symbols)
-// | Var(v) ->
-// 4 if symbols.get(v).type != Int:
-// fail("Function name used as variable")
-// | --snip--
+pub fn typecheck_block(block: &parser::Block, symbol_table: &mut SymbolTable) {
+    let parser::Block(block_items) = block;
+    for block_item in block_items {
+        match block_item {
+            parser::BlockItem::D(declaration) => typecheck_declaration(declaration, symbol_table),
+            parser::BlockItem::S(statement) => typecheck_statement(statement, symbol_table),
+        }
+    }
+}
 
-pub fn typecheck_exp(expr: parser::Expr, symbol_table: &mut SymbolTable) {}
+pub fn typecheck_statement(statement: &parser::Statement, symbol_table: &mut SymbolTable) {
+    match statement {
+        parser::Statement::Return(expr) => typecheck_expr(expr, symbol_table),
+        parser::Statement::Expression(expr) => typecheck_expr(expr, symbol_table),
+        parser::Statement::If(cond, then_branch, else_branch) => {
+            typecheck_expr(cond, symbol_table);
+            typecheck_statement(then_branch.as_ref(), symbol_table);
+            if let Some(else_stmt) = else_branch.as_ref() {
+                typecheck_statement(else_stmt.as_ref(), symbol_table);
+            }
+        }
+        parser::Statement::Compound(block) => typecheck_block(block, symbol_table),
+        parser::Statement::While(cond, body, _) => {
+            typecheck_expr(cond, symbol_table);
+            typecheck_statement(body.as_ref(), symbol_table);
+        }
+        parser::Statement::DoWhile(body, cond, _) => {
+            typecheck_statement(body.as_ref(), symbol_table);
+            typecheck_expr(cond, symbol_table);
+        }
+        parser::Statement::For(init_1, init_2, init_3, body, _) => {
+            match init_1 {
+                parser::ForInit::InitDecl(decl) => {
+                    typecheck_variable_declaration(decl, symbol_table)
+                }
+                parser::ForInit::InitExp(opt_expr) => {
+                    if let Some(expr) = opt_expr.as_ref() {
+                        typecheck_expr(expr, symbol_table);
+                    }
+                }
+            }
+
+            if let Some(expr) = init_2.as_ref() {
+                typecheck_expr(expr, symbol_table);
+            }
+
+            if let Some(expr) = init_3.as_ref() {
+                typecheck_expr(expr, symbol_table);
+            }
+
+            typecheck_statement(body.as_ref(), symbol_table);
+        }
+        _ => {}
+    }
+}
+
+pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) {
+    // Checks that types are used correctly
+    match expr {
+        parser::Expr::FunctionCall(name, arguments) => {
+            if let Some(info) = symbol_table.map.get(name) {
+                let f_type = &info.ty;
+                match f_type {
+                    Type::Int => panic!("Variable used as function name"),
+                    Type::FunType(n) => {
+                        if n != &arguments.len() {
+                            panic!("Function called with wrong amount of parameters")
+                        }
+                    }
+                }
+
+                for arg in arguments {
+                    typecheck_expr(arg, symbol_table);
+                }
+            } else {
+                panic!("Undeclared function");
+            }
+        }
+
+        parser::Expr::Var(name) => {
+            if let Some(info) = symbol_table.map.get(name) {
+                let f_type = &info.ty;
+                match f_type {
+                    Type::FunType(_) => panic!("Function name used as variable"),
+                    _ => {}
+                }
+            } else {
+                panic!("Undeclared variable");
+            }
+        }
+
+        parser::Expr::Assignment(left, right) => {
+            typecheck_expr(left.as_ref(), symbol_table);
+            typecheck_expr(right.as_ref(), symbol_table);
+        }
+
+        parser::Expr::Unary(_, e) => typecheck_expr(e.as_ref(), symbol_table),
+
+        parser::Expr::Binary(_, left, right) => {
+            typecheck_expr(left.as_ref(), symbol_table);
+            typecheck_expr(right.as_ref(), symbol_table);
+        }
+
+        parser::Expr::Conditional(cond, then_branch, else_branch) => {
+            typecheck_expr(cond.as_ref(), symbol_table);
+            typecheck_expr(then_branch.as_ref(), symbol_table);
+            typecheck_expr(else_branch.as_ref(), symbol_table);
+        }
+
+        _ => {}
+    }
+}
 
 // Wrapper for semantic analysis passes
 pub fn semantic_analysis(ast: &parser::Program, symbol_table: &mut SymbolTable) -> parser::Program {
-    let identifier_resolution_ast = resolve_program(ast);
+    let identifier_resolution_ast = resolve_program(ast, symbol_table);
     let loop_labeling_ast = label_program(&identifier_resolution_ast);
+    typecheck_program(&loop_labeling_ast, symbol_table);
+
     loop_labeling_ast
 }

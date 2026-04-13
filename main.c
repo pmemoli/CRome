@@ -1,6 +1,4 @@
-int foo(int b, int c);
-
 int main(void) {
-    int foo(int a);
-    return foo(1);
+    int a(int a);
+    return a(1);
 }

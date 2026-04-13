@@ -9,7 +9,7 @@ use tempfile::{Builder, NamedTempFile};
 mod lexer;
 mod parser;
 mod symbol;
-// mod tacky;
+mod tacky;
 mod validate;
 
 #[derive(Parser)]
@@ -75,18 +75,18 @@ fn main() -> Result<()> {
 
     let resolved_ast = validate::semantic_analysis(&ast, &mut symbol_table);
 
-    println!("{:#?}", resolved_ast);
-
     if args.validate {
         return Ok(());
     }
 
-    // let tacky_ast = tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
-    //
-    // if args.tacky {
-    //     return Ok(());
-    // }
-    //
+    let tacky_ast = tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
+
+    println!("{:#?}", tacky_ast);
+
+    if args.tacky {
+        return Ok(());
+    }
+
     // let asm_ast = codegen::codegen_program(&tacky_ast, &mut symbol_table);
     //
     // if args.codegen {
