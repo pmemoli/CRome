@@ -1,19 +1,19 @@
-C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". The project is just the the preprocessed C to ASM compiler. Preprocessor and Linker comes from gcc. 
+# CRome
+
+C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". The project is just the the preprocessed C to ASM compiler. Preprocessor and Linker comes from gcc.
+
+After implementing the book's subset of C, the language will be extended with cool stuff like ADTs and pattern matching. The final goal is compiling an simple xv6-like OS.  
 
 Very much a WIP, currently in chapter 9 out of 20.
 
 TODO:
 
 - Chapter 9 codegen.
-- Refactor the codegen into three files, its kinda big now.
-- The label counter should be local to the codegen pass, not part of symbol table.
 
 Backlog:
 
 - Potentially flatten some tacky to asm passes into one function rather than a gazillion.
 - Make lexer and parser work with Result's rather than just panicking for errors.
-
-# Compiler passes
 
 ## Lexer
 
@@ -132,25 +132,39 @@ binary_operator = Add | Subtract | Multiply | Divide | Remainder | Equal | NotEq
 
 ## ASM Grammar
 ```
-program = Program(function_definition)
+program = Program(function_definition*)
 function_definition = Function(identifier name, instruction* instructions)
 instruction = Mov(operand src, operand dst)
-| Unary(unary_operator, operand)
-| Binary(binary_operator, operand, operand)
-| Idiv(operand)
-| Cdq
-| AllocateStack(int)
-| Ret
+    | Unary(unary_operator, operand)
+    | Binary(binary_operator, operand, operand)
+    | Cmp(operand, operand)
+    | Idiv(operand)
+    | Cdq
+    | Jmp(identifier)
+    | JmpCC(cond_code, identifier)
+    | SetCC(cond_code, operand)
+    | Label(identifier)
+    | AllocateStack(int)
+    | DeallocateStack(int)
+    | Push(operand)
+    | Call(identifier)
+    | Ret
 unary_operator = Neg | Not
 binary_operator = Add | Sub | Mult
 operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int)
-reg = AX | DX | R10 | R11
+cond_code = E | NE | G | GE | L | LE
+reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11
 ```
 
-3 passes:
+# First pass (Tacky to ASM)
 
-1. Convert tacky to asm (refers to temp vars directly with Pseudo(identifier))
-2. Replace pseudoregisters with concrete addresses in the stack with Stack(int)
-3. Fix up instructions so that src and dst operands are not both memory addresses
+1. Convert Tacky to ASM, without register allocation (using Pseudo(identifier) for variables)
 
+# Second pass (Register allocation)
+
+1. Replace Pseudo(identifier) with Stack(int) for variables, and Reg(reg) for temps.
+
+# Third pass (Instruction fix up)
+
+1. Fix up instructions so that src and dst operands are not both memory addresses
 

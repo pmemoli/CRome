@@ -4,7 +4,7 @@ use std::fs;
 use std::process::Command;
 use tempfile::{Builder, NamedTempFile};
 
-// mod codegen;
+mod codegen;
 // mod emission;
 mod lexer;
 mod parser;
@@ -81,18 +81,18 @@ fn main() -> Result<()> {
 
     let tacky_ast = tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
 
-    println!("{:#?}", tacky_ast);
-
     if args.tacky {
         return Ok(());
     }
 
-    // let asm_ast = codegen::codegen_program(&tacky_ast, &mut symbol_table);
-    //
-    // if args.codegen {
-    //     return Ok(());
-    // }
-    //
+    let asm_ast = codegen::codegen_program(&tacky_ast, &mut symbol_table);
+
+    println!("{:#?}", asm_ast);
+
+    if args.codegen {
+        return Ok(());
+    }
+
     // let asm_str = emission::emission_program(&asm_ast);
     //
     // let assembly_file = Builder::new().suffix(".s").tempfile()?;
