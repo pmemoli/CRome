@@ -9,7 +9,7 @@ pub enum Type {
 #[derive(Debug)]
 pub enum SymbolMetadata {
     Variable {
-        stack_offset: u32, // Currently each variable takes 4 bytes
+        stack_offset: isize, // Currently each variable takes 4 bytes
     },
     Function {
         defined: bool,
@@ -44,7 +44,7 @@ impl SymbolTable {
 
         let info = SymbolInfo {
             metadata: SymbolMetadata::Variable {
-                stack_offset: ((var_count + 1) as u32) * 4,
+                stack_offset: -(((var_count + 1) * 4) as isize),
             },
             ty: Type::Int,
         };

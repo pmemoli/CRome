@@ -15,11 +15,31 @@ pub fn tacky_program_to_asm(tacky_program: &tacky::Program) -> Program {
 pub fn tacky_function_to_asm(tacky_function: &tacky::Function) -> Function {
     let tacky::Function(tacky_identifier, tacky_arguments, tacky_instructions) = tacky_function;
 
+    let mut asm_instructions = Vec::new();
+
+    // Passes arguments as pseudovariables to later clobber caller saved registers freely
+    let reg_order = vec![Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
+    for i in 0..tacky_arguments.len() {
+        let arg = tacky_arguments[i].to_string();
+
+        if i < reg_order.len() {
+            let src = Operand::Reg(reg_order[i].clone());
+            asm_instructions.push(Instruction::Mov(src, Operand::Pseudo(arg)));
+        } else {
+            let j = i - reg_order.len();
+            asm_instructions.push(Instruction::Mov(
+                Operand::Stack(8 * (j + 2) as isize), // First arg is at RSP + 16 (old RBP + ret address)
+                Operand::Pseudo(arg),
+            ));
+        }
+    }
+
+    for instruction in tacky_instructions {
+        let mut asm_instrs = tacky_instruction_to_asm(instruction);
+        asm_instructions.append(&mut asm_instrs);
+    }
+
     let identifier = tacky_identifier.to_string();
-    let asm_instructions = tacky_instructions
-        .into_iter()
-        .flat_map(tacky_instruction_to_asm)
-        .collect();
 
     Function(identifier, asm_instructions)
 }
@@ -120,6 +140,50 @@ pub fn tacky_instruction_to_asm(tacky_function: &tacky::Instruction) -> Vec<Inst
             ]
         }
         tacky::Instruction::Label(label) => vec![Instruction::Label(label.to_string())],
+        tacky::Instruction::FunCall(identifier, args, dst) => {
+            let mut instructions = Vec::new();
+
+            let reg_order = vec![Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
+
+            // Add padding to ensure stack is 16-byte aligned before call instruction
+            let stack_args = (args.len() as isize - reg_order.len() as isize).max(0) as usize;
+            let mut stack_padding = 0;
+            if stack_args % 2 == 1 {
+                stack_padding = 8;
+                instructions.push(Instruction::AllocateStack(stack_padding));
+            }
+
+            // Pass args according to ABI
+            for i in 0..args.len() {
+                if i < reg_order.len() {
+                    let asm_arg = tacky_val_to_asm(&args[i]);
+                    let dst = Operand::Reg(reg_order[i].clone());
+                    instructions.push(Instruction::Mov(asm_arg, dst));
+                } else {
+                    // We push stack arguments in reverse order
+                    let stack_arg_number = i - reg_order.len();
+                    let asm_arg = tacky_val_to_asm(&args[args.len() - 1 - stack_arg_number]);
+
+                    instructions.push(Instruction::Push(asm_arg));
+                }
+            }
+
+            // Call function
+            instructions.push(Instruction::Call(identifier.to_string()));
+
+            // Cleanup arguments
+            let stack_arguments = (args.len() as isize - reg_order.len() as isize).max(0) as usize;
+            let bytes_to_cleanup = stack_arguments * 8 + stack_padding;
+            if bytes_to_cleanup > 0 {
+                instructions.push(Instruction::DeallocateStack(bytes_to_cleanup));
+            }
+
+            // Retrieve return value
+            let dst_asm_op = tacky_val_to_asm(dst);
+            instructions.push(Instruction::Mov(Operand::Reg(Reg::AX), dst_asm_op));
+
+            instructions
+        }
     }
 }
 

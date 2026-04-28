@@ -1,4 +1,3 @@
-int main(void) {
-    int a(int a);
-    return a(1);
-}
+int simple(int a) { return a; }
+
+int main(void) { return simple(42); }

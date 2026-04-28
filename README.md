@@ -156,15 +156,23 @@ cond_code = E | NE | G | GE | L | LE
 reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11
 ```
 
-# First pass (Tacky to ASM)
+### First pass (Tacky to ASM)
 
-1. Convert Tacky to ASM, without register allocation (using Pseudo(identifier) for variables)
+Convert Tacky to ASM, without register allocation (using Pseudo(identifier) for variables).
 
-# Second pass (Register allocation)
+. System V 64 bit calling ABI is implemented in this pass:
+    - input/output regs
+    - callee/caller saved regs
+    - caller handles arg cleanup
+    - 16 byte aligned before call.
 
-1. Replace Pseudo(identifier) with Stack(int) for variables, and Reg(reg) for temps.
+. Copies arguments to pseudo variables at the start of each function, rather than using the corresponding registers/stack.
 
-# Third pass (Instruction fix up)
+### Second pass (Register allocation)
 
-1. Fix up instructions so that src and dst operands are not both memory addresses
+Replace Pseudo(identifier) with Stack(int) for variables, and Reg(reg) for temps. Allocates memory so that each identifier gets its own place in the stack.
+
+### Third pass (Instruction fix up)
+
+Fix up instructions so that src and dst operands are not both memory addresses
 

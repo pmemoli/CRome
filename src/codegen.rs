@@ -1,6 +1,6 @@
 use crate::{symbol::SymbolTable, tacky};
 
-mod instruction_fixup;
+// mod instruction_fixup;
 mod register_allocation;
 mod tacky_to_asm;
 
@@ -39,8 +39,8 @@ pub enum Instruction {
     JmpCC(CondCode, String),
     SetCC(CondCode, Operand),
     Label(String),
-    AllocateStack(u32),
-    DeallocateStack(u32),
+    AllocateStack(usize),
+    DeallocateStack(usize),
     Push(Operand),
     Call(String),
     Ret,
@@ -67,7 +67,7 @@ pub enum Operand {
     Imm(i32),
     Reg(Reg),
     Pseudo(String),
-    Stack(u32),
+    Stack(isize),
 }
 
 // cond_code = E | NE | G | GE | L | LE
@@ -97,9 +97,10 @@ pub enum Reg {
 
 // ASM codegen wrapper
 pub fn codegen_program(program: &tacky::Program, symbol_table: &mut SymbolTable) -> Program {
-    let mut asm_program = tacky_to_asm::tacky_program_to_asm(program);
-    // register_allocation::resolve_pseudo_registers_program(&mut asm_program, symbol_table);
-    // instruction_fixup::instruction_fixup_program(&mut asm_program, symbol_table);
+    let asm_program = tacky_to_asm::tacky_program_to_asm(program);
+    let asm_program =
+        register_allocation::resolve_pseudo_registers_program(&asm_program, symbol_table);
+    // let asm_program = instruction_fixup::instruction_fixup_program(&mut asm_program, symbol_table);
 
     asm_program
 }
