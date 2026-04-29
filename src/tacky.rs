@@ -73,11 +73,12 @@ pub fn ast_program_to_tacky(
 
     let mut tacky_functions = Vec::new();
     for ast_function in ast_function_declarations {
-        tacky_functions.push(ast_function_declaration_to_tacky(
-            ast_function,
-            symbol_table,
-            &mut label_idx,
-        ));
+        let tacky_function =
+            ast_function_declaration_to_tacky(ast_function, symbol_table, &mut label_idx);
+
+        if let Some(f) = tacky_function {
+            tacky_functions.push(f);
+        }
     }
 
     Program(tacky_functions)
@@ -87,18 +88,23 @@ pub fn ast_function_declaration_to_tacky(
     ast_function: &parser::FunctionDeclaration,
     symbol_table: &mut SymbolTable,
     label_idx: &mut usize,
-) -> Function {
+) -> Option<Function> {
     let parser::FunctionDeclaration(identifier, parameters, block) = ast_function;
 
     let mut instructions = Vec::new();
 
+    // Only emit code for defined functions.
     if let Some(block) = block.as_ref() {
         ast_block_to_tacky(block, &mut instructions, symbol_table, label_idx);
+        instructions.push(Instruction::Return(Val::Constant(0)));
+        Some(Function(
+            identifier.clone(),
+            parameters.clone(),
+            instructions,
+        ))
+    } else {
+        None
     }
-
-    instructions.push(Instruction::Return(Val::Constant(0)));
-
-    Function(identifier.clone(), parameters.clone(), instructions)
 }
 
 pub fn ast_variable_declaration_to_tacky(
@@ -128,7 +134,7 @@ pub fn ast_declaration_to_tacky(
             symbol_table,
             label_idx,
         ),
-        _ => {} // Function definitions are handled at the top level, these have empty bodies
+        _ => {}
     }
 }
 

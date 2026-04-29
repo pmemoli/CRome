@@ -63,13 +63,13 @@ impl SymbolTable {
         self.map.insert(name.clone(), info);
     }
 
-    pub fn stack_size(&self) -> u32 {
+    pub fn stack_size(&self) -> usize {
         let var_count = self
             .map
             .values()
             .filter(|s| matches!(s.metadata, SymbolMetadata::Variable { .. }))
             .count();
 
-        ((var_count + 1) as u32) * 4
+        (var_count + 1) * 4
     }
 }

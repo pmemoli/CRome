@@ -1,25 +1,32 @@
 use super::*;
 
-pub fn instruction_fixup_program(program: &mut Program, symbol_table: &mut SymbolTable) {
-    let Program(function) = program;
-    instruction_fixup_function(function, symbol_table);
+pub fn instruction_fixup_program(program: &Program, symbol_table: &SymbolTable) -> Program {
+    let Program(functions) = program;
+
+    let mut fixed_functions = Vec::new();
+    for function in functions {
+        fixed_functions.push(instruction_fixup_function(function, symbol_table));
+    }
+
+    Program(fixed_functions)
 }
 
-pub fn instruction_fixup_function(function: &mut Function, symbol_table: &mut SymbolTable) {
-    let Function(_, instructions) = function;
+pub fn instruction_fixup_function(function: &Function, symbol_table: &SymbolTable) -> Function {
+    let Function(identifier, instructions) = function;
 
     let stack_size = SymbolTable::stack_size(symbol_table);
+    let aligned_stack_size = stack_size.next_multiple_of(16);
 
-    let mut allocated_instructions = vec![Instruction::AllocateStack(stack_size)];
+    let mut allocated_instructions = vec![Instruction::AllocateStack(aligned_stack_size)];
     let fixed_instructions = instructions
         .into_iter()
         .flat_map(instruction_fixup_instruction);
     allocated_instructions.extend(fixed_instructions);
 
-    *instructions = allocated_instructions;
+    Function(identifier.clone(), allocated_instructions)
 }
 
-pub fn instruction_fixup_instruction(instruction: &mut Instruction) -> Vec<Instruction> {
+pub fn instruction_fixup_instruction(instruction: &Instruction) -> Vec<Instruction> {
     match instruction {
         Instruction::Mov(src @ Operand::Stack(_), dst @ Operand::Stack(_)) => {
             vec![

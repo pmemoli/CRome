@@ -3,4 +3,4 @@ run:
 
 test:
 	cargo build
-	./tests/test_compiler ./target/debug/crab --chapter 9 --stage codegen
+	./tests/test_compiler ./target/debug/crab --chapter 9

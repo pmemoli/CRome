@@ -2,10 +2,7 @@ use super::*;
 use crate::symbol::{SymbolMetadata, SymbolTable};
 
 // Second pass: Replace Pseudo(identifier) with Stack(int)
-pub fn resolve_pseudo_registers_program(
-    program: &Program,
-    symbol_table: &mut SymbolTable,
-) -> Program {
+pub fn resolve_pseudo_registers_program(program: &Program, symbol_table: &SymbolTable) -> Program {
     let Program(functions) = program;
 
     let mut resolved_functions = Vec::new();
@@ -18,7 +15,7 @@ pub fn resolve_pseudo_registers_program(
 
 pub fn resolve_pseudo_registers_function(
     function: &Function,
-    symbol_table: &mut SymbolTable,
+    symbol_table: &SymbolTable,
 ) -> Function {
     let Function(identifier, instructions) = function;
 
@@ -33,7 +30,7 @@ pub fn resolve_pseudo_registers_function(
 
 pub fn resolve_pseudo_registers_instruction(
     instruction: &Instruction,
-    symbol_table: &mut SymbolTable,
+    symbol_table: &SymbolTable,
 ) -> Instruction {
     match instruction {
         Instruction::Mov(src, dst) => {
@@ -71,10 +68,7 @@ pub fn resolve_pseudo_registers_instruction(
     }
 }
 
-pub fn resolve_pseudo_registers_operand(
-    operand: &Operand,
-    symbol_table: &mut SymbolTable,
-) -> Operand {
+pub fn resolve_pseudo_registers_operand(operand: &Operand, symbol_table: &SymbolTable) -> Operand {
     match operand {
         Operand::Pseudo(s) => {
             let symbol_info = symbol_table.map.get(s).unwrap();

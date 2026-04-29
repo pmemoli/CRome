@@ -91,9 +91,11 @@ pub fn resolve_block_item(
     symbol_table: &mut SymbolTable,
 ) -> parser::BlockItem {
     match block_item {
-        parser::BlockItem::D(declaration) => {
-            parser::BlockItem::D(resolve_declaration(declaration, identifier_map, symbol_table))
-        }
+        parser::BlockItem::D(declaration) => parser::BlockItem::D(resolve_declaration(
+            declaration,
+            identifier_map,
+            symbol_table,
+        )),
         parser::BlockItem::S(statement) => {
             parser::BlockItem::S(resolve_statement(statement, identifier_map, symbol_table))
         }
@@ -248,9 +250,11 @@ pub fn resolve_for_init(
     symbol_table: &mut SymbolTable,
 ) -> parser::ForInit {
     match for_init {
-        parser::ForInit::InitDecl(decl) => {
-            parser::ForInit::InitDecl(resolve_variable_declaration(decl, variable_map, symbol_table))
-        }
+        parser::ForInit::InitDecl(decl) => parser::ForInit::InitDecl(resolve_variable_declaration(
+            decl,
+            variable_map,
+            symbol_table,
+        )),
         parser::ForInit::InitExp(opt_expr) => {
             parser::ForInit::InitExp(resolve_optional_expr(opt_expr, variable_map))
         }

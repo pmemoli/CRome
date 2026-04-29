@@ -4,11 +4,11 @@ C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". 
 
 After implementing the book's subset of C, the language will be extended with cool stuff like ADTs and pattern matching. The final goal is compiling an simple xv6-like OS.  
 
-Very much a WIP, currently in chapter 9 out of 20.
+Very much a WIP, currently in chapter 10 out of 20.
 
 TODO:
 
-- Chapter 9 codegen.
+- Chapter 10.
 
 Backlog:
 
@@ -156,23 +156,23 @@ cond_code = E | NE | G | GE | L | LE
 reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11
 ```
 
-### First pass (Tacky to ASM)
-
-Convert Tacky to ASM, without register allocation (using Pseudo(identifier) for variables).
-
 . System V 64 bit calling ABI is implemented in this pass:
     - input/output regs
     - callee/caller saved regs
     - caller handles arg cleanup
     - 16 byte aligned before call.
 
-. Copies arguments to pseudo variables at the start of each function, rather than using the corresponding registers/stack.
+### First pass (Tacky to ASM)
+
+1. Convert Tacky to ASM, without register allocation (using Pseudo(identifier) for variables).
+2. Copies arguments to pseudo variables at the start of each function, rather than using the corresponding registers/stack.
 
 ### Second pass (Register allocation)
 
-Replace Pseudo(identifier) with Stack(int) for variables, and Reg(reg) for temps. Allocates memory so that each identifier gets its own place in the stack.
+1. Replace Pseudo(identifier) with Stack(int) for variables, and Reg(reg) for temps. 
 
 ### Third pass (Instruction fix up)
 
-Fix up instructions so that src and dst operands are not both memory addresses
+1. Fix up instructions so that src and dst operands are not both memory addresses
+2. Allocate stack space for each function, rounded up to a multiple of 16 bytes for alignment.
 
