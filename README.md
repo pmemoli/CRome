@@ -2,27 +2,34 @@
 
 C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". The project is just the the preprocessed C to ASM compiler. Preprocessor and Linker comes from gcc.
 
-After implementing the book's subset of C, the language will be extended with cool stuff like ADTs and pattern matching. The final goal is compiling an simple xv6-like OS.  
+After implementing the book's subset of C, the language will be extended with cool stuff like:
 
-Very much a WIP, currently in chapter 10 out of 20.
+- ADTs and pattern matching
+- Go-like methods for structs
+- A simple rust like module system
+
+And a bunch of extra optimizations.
+
+The final goal is writing and compiling a simple xv6-like OS.  
 
 TODO:
 
-- Chapter 10.
+- Chapter 10 semantic analysis.
 
 Backlog:
 
-- Potentially flatten some tacky to asm passes into one function rather than a gazillion.
-- Make lexer and parser work with Result's rather than just panicking for errors.
+- Proper error reporting system, currently just panics with a message and a backtrace.
 
 ## Lexer
 
 ## AST Specification
 ```
-program = Program(function_declaration*)
+program = Program(declaration*)
 declaration = FunDecl(function_declaration) | VarDecl(variable_declaration)
-variable_declaration = (identifier name, exp? init)
-function_declaration = (identifier name, identifier* params, block? body)
+variable_declaration = (identifier name, exp? init, storage_class?)
+function_declaration = (identifier name, identifier* params, 
+                        block? body, storage_class?)
+storage_class = Static | Extern
 block = Block(block_item*)
 block_item = S(statement) | D(declaration)
 for_init = InitDecl(variable_declaration) | InitExp(exp?)
@@ -53,11 +60,12 @@ Loop related statements are annotated in the semantic analysis pass.
 
 ## Formal Grammar
 ```
-<program> ::= { <function-declaration> }
+<program> ::= { <declaration> }
 <declaration> ::= <variable-declaration> | <function-declaration>
-<variable-declaration> ::= "int" <identifier> [ "=" <exp> ] ";"
-<function-declaration> ::= "int" <identifier> "(" <param-list> ")" ( <block> | ";")
+<variable-declaration> ::= { <specifier> }+ <identifier> [ "=" <exp> ] ";"
+<function-declaration> ::= { <specifier> }+ <identifier> "(" <param-list> ")" ( <block> | ";")
 <param-list> ::= "void" | "int" <identifier> { "," "int" <identifier> }
+<specifier> ::= "int" | "static" | "extern"
 <block> ::= "{" { <block-item> } "}"
 <block-item> ::= <statement> | <declaration>
 <declaration> ::= "int" <identifier> [ "=" <exp> ] ";"

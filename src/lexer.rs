@@ -40,6 +40,8 @@ pub enum Token {
     BreakKeyword,
     ContinueKeyword,
     Comma,
+    Static,
+    Extern,
 }
 
 pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
@@ -89,6 +91,8 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
             Token::ContinueKeyword
         }),
         (Regex::new(r"^,").unwrap(), |_| Token::Comma),
+        (Regex::new(r"^static\b").unwrap(), |_| Token::Static),
+        (Regex::new(r"^extern\b").unwrap(), |_| Token::Extern),
     ];
 
     let mut i = 0;
