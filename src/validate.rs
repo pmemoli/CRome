@@ -7,85 +7,109 @@ use crate::{
 
 // First pass: Variable resolution
 
-// 1. Map each variable name to a unique value and adds to symbol table
+// 1. Rename each non-linked variable name to a unique one.
 // 2. Check that variable assignments have valid left expressions (Var(String))
-// 3. Check that all variables are defined in their scope
-// 4. Check that variable declarations are not repeated in their scope
+// 3. Check that all variables and functions in expressions are declared
+// 4. Check that variable declarations are not repeated in their scope, except for extern
+//    declarations of variables which are declared with linkage
+
+// We use a declared identifier map for 1. 3. and 4.
 
 #[derive(Debug, Clone)]
 pub struct IdentifierInfo {
     new_name: String,
-    declared_in_scope: bool,
+    declared_in_current_scope: bool,
     has_linkage: bool,
 }
 
 type IdentifierMap = HashMap<String, IdentifierInfo>;
 
+fn new_unique_variable_name(identifier_map: &IdentifierMap) -> String {
+    format!("var.{}", identifier_map.len())
+}
+
 pub fn new_scope_identifier_map(identifier_map: &IdentifierMap) -> IdentifierMap {
     let mut new_identifier_map = identifier_map.clone();
 
     for identifier_info in new_identifier_map.values_mut() {
-        identifier_info.declared_in_scope = false;
+        identifier_info.declared_in_current_scope = false;
     }
 
     new_identifier_map
 }
 
-pub fn resolve_program(
-    program: &parser::Program,
-    symbol_table: &mut SymbolTable,
-) -> parser::Program {
+pub fn resolve_program(program: &parser::Program) -> parser::Program {
     let mut identifier_map = IdentifierMap::new();
 
     let parser::Program(declarations) = program;
     let mut new_declarations = Vec::new();
     for declaration in declarations {
-        new_declarations.push(resolve_declaration(
+        new_declarations.push(resolve_file_scope_declaration(
             declaration,
             &mut identifier_map,
-            symbol_table,
         ))
     }
 
     parser::Program(new_declarations)
 }
 
-pub fn resolve_declaration(
+pub fn resolve_file_scope_declaration(
     declaration: &parser::Declaration,
     identifier_map: &mut IdentifierMap,
-    symbol_table: &mut SymbolTable,
 ) -> parser::Declaration {
     match declaration {
         parser::Declaration::VarDecl(var_decl) => parser::Declaration::VarDecl(
-            resolve_variable_declaration(var_decl, identifier_map, symbol_table),
+            resolve_file_scope_variable_declaration(var_decl, identifier_map),
         ),
         parser::Declaration::FunDecl(func_decl) => {
-            let parser::FunctionDeclaration(_, _, init, _) = func_decl;
-
-            // Declarations are always called outside top-level, which can't have
-            // function definitions
-            if !init.is_none() {
-                panic!("Functions can't be defined outside top level")
-            }
-
-            parser::Declaration::FunDecl(resolve_function_declaration(
-                func_decl,
-                identifier_map,
-                symbol_table,
-            ))
+            parser::Declaration::FunDecl(resolve_function_declaration(func_decl, identifier_map))
         }
     }
 }
 
-pub fn resolve_block(
-    block: &parser::Block,
+pub fn resolve_block_scope_declaration(
+    declaration: &parser::Declaration,
     identifier_map: &mut IdentifierMap,
-    symbol_table: &mut SymbolTable,
-) -> parser::Block {
+) -> parser::Declaration {
+    match declaration {
+        parser::Declaration::VarDecl(var_decl) => parser::Declaration::VarDecl(
+            resolve_block_scope_variable_declaration(var_decl, identifier_map),
+        ),
+        parser::Declaration::FunDecl(func_decl) => {
+            let parser::FunctionDeclaration(_, _, init, _) = func_decl;
+
+            if !init.is_none() {
+                panic!("Functions can't be defined outside top level")
+            }
+
+            parser::Declaration::FunDecl(resolve_function_declaration(func_decl, identifier_map))
+        }
+    }
+}
+
+pub fn resolve_file_scope_variable_declaration(
+    declaration: &parser::VariableDeclaration,
+    identifier_map: &mut IdentifierMap,
+) -> parser::VariableDeclaration {
+    let parser::VariableDeclaration(name, _, _) = declaration;
+
+    identifier_map.insert(
+        name.clone(),
+        IdentifierInfo {
+            new_name: name.clone(), // Storage duration is always static
+            declared_in_current_scope: true,
+            has_linkage: true, // Always has external or internal linkage
+        },
+    );
+
+    declaration.clone()
+}
+
+pub fn resolve_block(block: &parser::Block, identifier_map: &mut IdentifierMap) -> parser::Block {
     let parser::Block(block_items) = block;
     let mut resolved_block_items = Vec::new();
     for item in block_items {
-        resolved_block_items.push(resolve_block_item(item, identifier_map, symbol_table));
+        resolved_block_items.push(resolve_block_item(item, identifier_map));
     }
 
     parser::Block(resolved_block_items)
@@ -94,58 +118,77 @@ pub fn resolve_block(
 pub fn resolve_block_item(
     block_item: &parser::BlockItem,
     identifier_map: &mut IdentifierMap,
-    symbol_table: &mut SymbolTable,
 ) -> parser::BlockItem {
     match block_item {
-        parser::BlockItem::D(declaration) => parser::BlockItem::D(resolve_declaration(
-            declaration,
-            identifier_map,
-            symbol_table,
-        )),
+        parser::BlockItem::D(declaration) => {
+            parser::BlockItem::D(resolve_block_scope_declaration(declaration, identifier_map))
+        }
         parser::BlockItem::S(statement) => {
-            parser::BlockItem::S(resolve_statement(statement, identifier_map, symbol_table))
+            parser::BlockItem::S(resolve_statement(statement, identifier_map))
         }
     }
 }
 
-pub fn resolve_variable_declaration(
+pub fn resolve_block_scope_variable_declaration(
     declaration: &parser::VariableDeclaration,
     identifier_map: &mut IdentifierMap,
-    symbol_table: &mut SymbolTable,
 ) -> parser::VariableDeclaration {
     let parser::VariableDeclaration(name, init, storage_class) = declaration;
 
     if let Some(identifier_info) = identifier_map.get(name) {
-        if identifier_info.declared_in_scope {
-            panic!("Duplicate variable declaration!");
+        if identifier_info.declared_in_current_scope {
+            // Variables can be redeclared with extern only if the previous declaration has linkage
+            if !(identifier_info.has_linkage
+                && storage_class == &Some(parser::StorageClass::Extern))
+            {
+                panic!("Duplicate variable declaration!");
+            }
         }
     }
 
-    let new_name = symbol_table.generate_variable();
-    identifier_map.insert(
-        name.clone(),
-        IdentifierInfo {
-            new_name: new_name.clone(),
-            declared_in_scope: true,
-            has_linkage: false,
-        },
-    );
+    // External specifiers imply linkage (no unique name)
+    if storage_class == &Some(parser::StorageClass::Extern) {
+        if let Some(_) = init.as_ref() {
+            panic!("External variable declaration can't have initializer");
+        }
 
-    let resolved_init = init.as_ref().map(|expr| resolve_expr(expr, identifier_map));
+        identifier_map.insert(
+            name.clone(),
+            IdentifierInfo {
+                new_name: name.clone(),
+                declared_in_current_scope: true,
+                has_linkage: true,
+            },
+        );
 
-    parser::VariableDeclaration(new_name, resolved_init, storage_class.clone())
+        declaration.clone()
+    } else {
+        let new_name = new_unique_variable_name(identifier_map);
+        identifier_map.insert(
+            name.clone(),
+            IdentifierInfo {
+                new_name: new_name.clone(),
+                declared_in_current_scope: true,
+                has_linkage: false,
+            },
+        );
+
+        let resolved_init = init.as_ref().map(|expr| resolve_expr(expr, identifier_map));
+
+        parser::VariableDeclaration(new_name, resolved_init, storage_class.clone())
+    }
 }
 
 pub fn resolve_function_declaration(
     declaration: &parser::FunctionDeclaration,
     identifier_map: &mut IdentifierMap,
-    symbol_table: &mut SymbolTable,
 ) -> parser::FunctionDeclaration {
     let parser::FunctionDeclaration(name, parameters, body, storage_class) = declaration;
 
     // Checks if local variable was declared in the same scope
     if let Some(identifier_info) = identifier_map.get(name) {
-        if identifier_info.declared_in_scope && !identifier_info.has_linkage {
+        let is_variable = !identifier_info.has_linkage;
+        if is_variable && identifier_info.declared_in_current_scope {
             panic!("Duplicate variable declaration!");
         }
     }
@@ -155,7 +198,7 @@ pub fn resolve_function_declaration(
         name.clone(),
         IdentifierInfo {
             new_name: name.clone(),
-            declared_in_scope: true,
+            declared_in_current_scope: true,
             has_linkage: true,
         },
     );
@@ -164,12 +207,12 @@ pub fn resolve_function_declaration(
     let mut inner_map = new_scope_identifier_map(identifier_map);
     let mut new_params = Vec::new();
     for parameter in parameters {
-        new_params.push(resolve_parameter(parameter, &mut inner_map, symbol_table));
+        new_params.push(resolve_parameter(parameter, &mut inner_map));
     }
 
     match body {
         Some(block) => {
-            let new_body = resolve_block(block, &mut inner_map, symbol_table);
+            let new_body = resolve_block(block, &mut inner_map);
             parser::FunctionDeclaration(
                 name.clone(),
                 new_params,
@@ -181,23 +224,19 @@ pub fn resolve_function_declaration(
     }
 }
 
-pub fn resolve_parameter(
-    parameter_name: &String,
-    identifier_map: &mut IdentifierMap,
-    symbol_table: &mut SymbolTable,
-) -> String {
+pub fn resolve_parameter(parameter_name: &String, identifier_map: &mut IdentifierMap) -> String {
     if let Some(identifier_info) = identifier_map.get(parameter_name) {
-        if identifier_info.declared_in_scope {
+        if identifier_info.declared_in_current_scope {
             panic!("Duplicate variable declaration!");
         }
     }
 
-    let new_name = symbol_table.generate_variable();
+    let new_name = new_unique_variable_name(identifier_map);
     identifier_map.insert(
         parameter_name.clone(),
         IdentifierInfo {
             new_name: new_name.clone(),
-            declared_in_scope: true,
+            declared_in_current_scope: true,
             has_linkage: false,
         },
     );
@@ -208,7 +247,6 @@ pub fn resolve_parameter(
 pub fn resolve_statement(
     statement: &parser::Statement,
     variable_map: &mut IdentifierMap,
-    symbol_table: &mut SymbolTable,
 ) -> parser::Statement {
     match statement {
         parser::Statement::Return(expr) => {
@@ -219,35 +257,35 @@ pub fn resolve_statement(
         }
         parser::Statement::If(cond, then_branch, else_branch) => {
             let cond = resolve_expr(cond, variable_map);
-            let then_branch = resolve_statement(then_branch.as_ref(), variable_map, symbol_table);
+            let then_branch = resolve_statement(then_branch.as_ref(), variable_map);
             let else_branch = else_branch
                 .as_ref()
-                .map(|stmt| Box::new(resolve_statement(stmt, variable_map, symbol_table)));
+                .map(|stmt| Box::new(resolve_statement(stmt, variable_map)));
 
             parser::Statement::If(cond, Box::new(then_branch), else_branch)
         }
         parser::Statement::Compound(block) => {
             let mut new_variable_map = new_scope_identifier_map(variable_map);
-            let resolved_block = resolve_block(block, &mut new_variable_map, symbol_table);
+            let resolved_block = resolve_block(block, &mut new_variable_map);
             parser::Statement::Compound(resolved_block)
         }
         parser::Statement::While(cond, body, label) => {
             let cond = resolve_expr(cond, variable_map);
-            let body = resolve_statement(body.as_ref(), variable_map, symbol_table);
+            let body = resolve_statement(body.as_ref(), variable_map);
             parser::Statement::While(cond, Box::new(body), label.clone())
         }
         parser::Statement::DoWhile(body, cond, label) => {
-            let body = resolve_statement(body.as_ref(), variable_map, symbol_table);
+            let body = resolve_statement(body.as_ref(), variable_map);
             let cond = resolve_expr(cond, variable_map);
             parser::Statement::DoWhile(Box::new(body), cond, label.clone())
         }
         parser::Statement::For(for_init, opt_cond, opt_post, body, label) => {
             let mut new_variable_map = new_scope_identifier_map(variable_map);
 
-            let for_init = resolve_for_init(for_init, &mut new_variable_map, symbol_table);
+            let for_init = resolve_for_init(for_init, &mut new_variable_map);
             let opt_cond = resolve_optional_expr(opt_cond, &mut new_variable_map);
             let opt_post = resolve_optional_expr(opt_post, &mut new_variable_map);
-            let body = resolve_statement(body.as_ref(), &mut new_variable_map, symbol_table);
+            let body = resolve_statement(body.as_ref(), &mut new_variable_map);
 
             parser::Statement::For(for_init, opt_cond, opt_post, Box::new(body), label.clone())
         }
@@ -258,14 +296,11 @@ pub fn resolve_statement(
 pub fn resolve_for_init(
     for_init: &parser::ForInit,
     variable_map: &mut IdentifierMap,
-    symbol_table: &mut SymbolTable,
 ) -> parser::ForInit {
     match for_init {
-        parser::ForInit::InitDecl(decl) => parser::ForInit::InitDecl(resolve_variable_declaration(
-            decl,
-            variable_map,
-            symbol_table,
-        )),
+        parser::ForInit::InitDecl(decl) => {
+            parser::ForInit::InitDecl(resolve_block_scope_variable_declaration(decl, variable_map))
+        }
         parser::ForInit::InitExp(opt_expr) => {
             parser::ForInit::InitExp(resolve_optional_expr(opt_expr, variable_map))
         }
@@ -642,7 +677,7 @@ pub fn resolve_expr(expr: &parser::Expr, identifier_map: &mut IdentifierMap) -> 
 //
 // Wrapper for semantic analysis passes
 pub fn semantic_analysis(ast: &parser::Program, symbol_table: &mut SymbolTable) -> parser::Program {
-    let resolved_variable_ast = resolve_program(ast, symbol_table);
+    let resolved_variable_ast = resolve_program(ast);
 
     // let loop_labeling_ast = label_program(&identifier_resolution_ast);
     // typecheck_program(&loop_labeling_ast, symbol_table);

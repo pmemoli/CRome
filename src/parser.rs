@@ -26,7 +26,7 @@ pub struct FunctionDeclaration(
 pub struct VariableDeclaration(pub String, pub Option<Expr>, pub Option<StorageClass>);
 
 // storage_class = Static | Extern
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StorageClass {
     Static,
     Extern,
