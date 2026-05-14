@@ -10,7 +10,7 @@ mod lexer;
 mod parser;
 mod symbol;
 // mod tacky;
-// mod validate;
+mod validate;
 
 #[derive(Parser)]
 #[command(name = "crab")]
@@ -69,18 +69,18 @@ fn main() -> Result<()> {
 
     let ast = parser::parse_program(&mut tokens);
 
-    println!("{:#?}", ast);
-
     if args.parse {
         return Ok(());
     }
 
-    // let resolved_ast = validate::semantic_analysis(&ast, &mut symbol_table);
-    //
-    // if args.validate {
-    //     return Ok(());
-    // }
-    //
+    let resolved_ast = validate::semantic_analysis(&ast, &mut symbol_table);
+
+    println!("{:#?}", ast);
+
+    if args.validate {
+        return Ok(());
+    }
+
     // let tacky_ast = tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
     //
     // if args.tacky {

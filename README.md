@@ -93,6 +93,30 @@ Loop related statements are annotated in the semantic analysis pass.
 
 ## Semantic Analysis
 
+### Linkage and Storage rules for variables and functions:
+
+Tables from Writing a C Compiler, Pages 216-217.
+
+#### Variable Declarations
+
+| Scope | Specifier | Linkage | Storage Duration | With Initializer | Without Initializer |
+|-------|-----------|---------|------------------|------------------|---------------------|
+| File scope | None | External | Static | Yes | Tentative |
+| File scope | `static` | Internal | Static | Yes | Tentative |
+| File scope | `extern` | Matches prior visible declaration; external by default | Static | Yes | No |
+| Block scope | None | None | Automatic | Yes | Yes (defined but uninitialized) |
+| Block scope | `static` | None | Static | Yes | Yes (initialized to zero) |
+| Block scope | `extern` | Matches prior visible declaration; external by default | Static | Invalid | No |
+
+#### Function Declarations
+
+| Scope | Specifier | Linkage | With Body | Without Body |
+|-------|-----------|---------|-----------|--------------|
+| File scope | None or `extern` | Matches prior visible declaration; external by default | Yes | No |
+| File scope | `static` | Internal | Yes | No |
+| Block scope | None or `extern` | Matches prior visible declaration; external by default | Invalid | No |
+| Block scope | `static` | Invalid | Invalid | Invalid |
+
 ### First pass (Identifier Resolution):
 
 #### Variables:
@@ -169,6 +193,7 @@ reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11
     - callee/caller saved regs
     - caller handles arg cleanup
     - 16 byte aligned before call.
+    - .text, .data, .rodata and .bss semantics are implemented
 
 ### First pass (Tacky to ASM)
 
@@ -184,3 +209,25 @@ reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11
 1. Fix up instructions so that src and dst operands are not both memory addresses
 2. Allocate stack space for each function, rounded up to a multiple of 16 bytes for alignment.
 
+## Code Emission
+
+### External Linkage
+
+If an identifier has external linkage, we emit it with a .globl directive. Otherwise we don't add the directive. Linker resolves external symbols at link time. 
+
+To work with dynamic libraries, we use call @PLT for functions when the definition is not present in the translation unit, and a regular call otherwise.
+
+### Internal Linkage
+
+Internally linked identifiers are accessed through RIP offsets. This makes the program position independent, and implements internal linkage at compile time.
+
+### No Linkage
+
+Handled through the stack
+
+### Storage Duration
+
+- .data holds static storage duration objects with non-zero initializers.
+- .bss holds static storage duration objects with zero initializers.
+
+Automatic storage duration objects are allocated on the stack at runtime.
