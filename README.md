@@ -14,6 +14,7 @@ The final goal is writing and compiling a simple xv6-like OS.
 
 TODO:
 
+- Solve doubts about the repeated declaration logic in the identifier pass in the S.A..
 - Chapter 10 semantic analysis.
 
 Backlog:
@@ -121,16 +122,19 @@ Tables from Writing a C Compiler, Pages 216-217.
 
 #### Variables:
 
-1. Map each variable name to a unique value and adds to symbol table 
+1. Rename each non-linked variable name to a unique one.
 2. Check that variable assignments have valid left expressions (Var(String))
-3. Check that all variables are defined in their scope
-4. Check that variable declarations are not repeated in their scope
+3. Check that all variables in expressions are declared
+4. Check that local variables are not redeclared in the current scope
 
-#### Functions (external linkage):
+#### Functions:
 
-1. Check that all function calls refer to declared functions in their scope
-2. Check that functions and variables are not declared with SAME name in the SAME scope
-3. Check that definitions of functions do not live within other functions.
+1. Check that all function calls refer to declared identifiers
+2. Check that definitions of functions do not live within blocks
+
+#### Both
+
+Check that identifier declarations do not contradict in having or not having linkage
 
 ### Second pass (Loop Annotation):
 

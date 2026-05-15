@@ -10,7 +10,7 @@ mod lexer;
 mod parser;
 mod symbol;
 // mod tacky;
-mod validate;
+mod semantic;
 
 #[derive(Parser)]
 #[command(name = "crab")]
@@ -73,9 +73,9 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let resolved_ast = validate::semantic_analysis(&ast, &mut symbol_table);
+    let resolved_ast = semantic::semantic_analysis(&ast, &mut symbol_table);
 
-    println!("{:#?}", ast);
+    println!("{:#?}", resolved_ast);
 
     if args.validate {
         return Ok(());
