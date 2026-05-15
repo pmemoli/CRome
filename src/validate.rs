@@ -5,16 +5,19 @@ use crate::{
     symbol::{SymbolMetadata, SymbolTable, Type},
 };
 
-// First pass: Variable resolution
+// First pass: Identifier resolution
 
 // 1. Rename each non-linked variable name to a unique one.
 // 2. Check that variable assignments have valid left expressions (Var(String))
-// 3. Check that all variables and functions in expressions are declared
+// 3. Check that all variables in expressions are declared
 // 4. Check that variable declarations are not repeated in their scope, except for extern
 //    declarations of variables which are declared with linkage
 
-// We use a declared identifier map for 1. 3. and 4.
+// 1. Check that all function calls refer to declared functions
+// 2. Check that functions and variables are not declared with SAME name in the SAME scope
+// 3. Check that definitions of functions do not live within blocks
 
+// We use a declared identifier map for this
 #[derive(Debug, Clone)]
 pub struct IdentifierInfo {
     new_name: String,
@@ -67,26 +70,6 @@ pub fn resolve_file_scope_declaration(
     }
 }
 
-pub fn resolve_block_scope_declaration(
-    declaration: &parser::Declaration,
-    identifier_map: &mut IdentifierMap,
-) -> parser::Declaration {
-    match declaration {
-        parser::Declaration::VarDecl(var_decl) => parser::Declaration::VarDecl(
-            resolve_block_scope_variable_declaration(var_decl, identifier_map),
-        ),
-        parser::Declaration::FunDecl(func_decl) => {
-            let parser::FunctionDeclaration(_, _, init, _) = func_decl;
-
-            if !init.is_none() {
-                panic!("Functions can't be defined outside top level")
-            }
-
-            parser::Declaration::FunDecl(resolve_function_declaration(func_decl, identifier_map))
-        }
-    }
-}
-
 pub fn resolve_file_scope_variable_declaration(
     declaration: &parser::VariableDeclaration,
     identifier_map: &mut IdentifierMap,
@@ -105,26 +88,22 @@ pub fn resolve_file_scope_variable_declaration(
     declaration.clone()
 }
 
-pub fn resolve_block(block: &parser::Block, identifier_map: &mut IdentifierMap) -> parser::Block {
-    let parser::Block(block_items) = block;
-    let mut resolved_block_items = Vec::new();
-    for item in block_items {
-        resolved_block_items.push(resolve_block_item(item, identifier_map));
-    }
-
-    parser::Block(resolved_block_items)
-}
-
-pub fn resolve_block_item(
-    block_item: &parser::BlockItem,
+pub fn resolve_block_scope_declaration(
+    declaration: &parser::Declaration,
     identifier_map: &mut IdentifierMap,
-) -> parser::BlockItem {
-    match block_item {
-        parser::BlockItem::D(declaration) => {
-            parser::BlockItem::D(resolve_block_scope_declaration(declaration, identifier_map))
-        }
-        parser::BlockItem::S(statement) => {
-            parser::BlockItem::S(resolve_statement(statement, identifier_map))
+) -> parser::Declaration {
+    match declaration {
+        parser::Declaration::VarDecl(var_decl) => parser::Declaration::VarDecl(
+            resolve_block_scope_variable_declaration(var_decl, identifier_map),
+        ),
+        parser::Declaration::FunDecl(func_decl) => {
+            let parser::FunctionDeclaration(_, _, init, _) = func_decl;
+
+            if !init.is_none() {
+                panic!("Functions can't be defined outside top level")
+            }
+
+            parser::Declaration::FunDecl(resolve_function_declaration(func_decl, identifier_map))
         }
     }
 }
@@ -221,6 +200,30 @@ pub fn resolve_function_declaration(
             )
         }
         None => parser::FunctionDeclaration(name.clone(), new_params, None, storage_class.clone()),
+    }
+}
+
+pub fn resolve_block(block: &parser::Block, identifier_map: &mut IdentifierMap) -> parser::Block {
+    let parser::Block(block_items) = block;
+    let mut resolved_block_items = Vec::new();
+    for item in block_items {
+        resolved_block_items.push(resolve_block_item(item, identifier_map));
+    }
+
+    parser::Block(resolved_block_items)
+}
+
+pub fn resolve_block_item(
+    block_item: &parser::BlockItem,
+    identifier_map: &mut IdentifierMap,
+) -> parser::BlockItem {
+    match block_item {
+        parser::BlockItem::D(declaration) => {
+            parser::BlockItem::D(resolve_block_scope_declaration(declaration, identifier_map))
+        }
+        parser::BlockItem::S(statement) => {
+            parser::BlockItem::S(resolve_statement(statement, identifier_map))
+        }
     }
 }
 
@@ -379,127 +382,146 @@ pub fn resolve_expr(expr: &parser::Expr, identifier_map: &mut IdentifierMap) -> 
     }
 }
 
-// // Second pass: Loop labeling
-// pub fn label_program(program: &parser::Program) -> parser::Program {
-//     let mut loop_idx = 0;
-//     let current_label = None;
-//
-//     let parser::Program(declarations) = program;
-//     let mut new_declarations = Vec::new();
-//     for declaration in declarations {
-//         new_declarations.push(label_function_declaration(
-//             declaration,
-//             &mut loop_idx,
-//             &current_label,
-//         ));
-//     }
-//
-//     parser::Program(new_declarations)
-// }
-//
-// pub fn label_function_declaration(
-//     function_declaration: &parser::FunctionDeclaration,
-//     loop_idx: &mut usize,
-//     current_label: &Option<String>,
-// ) -> parser::FunctionDeclaration {
-//     let parser::FunctionDeclaration(identifier, parameters, body) = function_declaration;
-//     if let Some(block) = body.as_ref() {
-//         let new_block = label_block(block, loop_idx, current_label);
-//         parser::FunctionDeclaration(identifier.clone(), parameters.clone(), Some(new_block))
-//     } else {
-//         function_declaration.clone()
-//     }
-// }
-//
-// pub fn label_block(
-//     block: &parser::Block,
-//     loop_idx: &mut usize,
-//     current_label: &Option<String>,
-// ) -> parser::Block {
-//     let parser::Block(block_items) = block;
-//     let labeled_block_items = block_items
-//         .iter()
-//         .map(|item| label_block_item(item, loop_idx, current_label))
-//         .collect();
-//
-//     parser::Block(labeled_block_items)
-// }
-//
-// pub fn label_block_item(
-//     block_item: &parser::BlockItem,
-//     loop_idx: &mut usize,
-//     current_label: &Option<String>,
-// ) -> parser::BlockItem {
-//     match block_item {
-//         parser::BlockItem::D(declaration) => parser::BlockItem::D(declaration.clone()),
-//         parser::BlockItem::S(statement) => {
-//             parser::BlockItem::S(label_statement(statement, loop_idx, current_label))
-//         }
-//     }
-// }
-//
-// pub fn label_statement(
-//     statement: &parser::Statement,
-//     loop_idx: &mut usize,
-//     current_label: &Option<String>,
-// ) -> parser::Statement {
-//     match statement {
-//         parser::Statement::Break(_) => {
-//             if matches!(current_label, None) {
-//                 panic!("Break statement outside of body");
-//             }
-//
-//             parser::Statement::Break(current_label.clone())
-//         }
-//         parser::Statement::Continue(_) => {
-//             if matches!(current_label, None) {
-//                 panic!("Continue statement outside of body");
-//             }
-//
-//             parser::Statement::Continue(current_label.clone())
-//         }
-//         parser::Statement::While(cond_expr, body_stmt, _) => {
-//             *loop_idx += 1;
-//             let new_label = Some(format!("loop.{}", loop_idx));
-//             let labeled_body = label_statement(body_stmt.as_ref(), loop_idx, &new_label);
-//
-//             parser::Statement::While(cond_expr.clone(), Box::new(labeled_body), new_label)
-//         }
-//         parser::Statement::DoWhile(body_stmt, cond_expr, _) => {
-//             *loop_idx += 1;
-//             let new_label = Some(format!("loop.{}", loop_idx));
-//             let labeled_body = label_statement(body_stmt.as_ref(), loop_idx, &new_label);
-//
-//             parser::Statement::DoWhile(Box::new(labeled_body), cond_expr.clone(), new_label)
-//         }
-//         parser::Statement::For(init_1, init_2, init_3, body_stmt, _) => {
-//             *loop_idx += 1;
-//             let new_label = Some(format!("loop.{}", loop_idx));
-//             let labeled_body = label_statement(body_stmt.as_ref(), loop_idx, &new_label);
-//
-//             parser::Statement::For(
-//                 init_1.clone(),
-//                 init_2.clone(),
-//                 init_3.clone(),
-//                 Box::new(labeled_body),
-//                 new_label,
-//             )
-//         }
-//         parser::Statement::Compound(block) => {
-//             parser::Statement::Compound(label_block(block, loop_idx, current_label))
-//         }
-//         parser::Statement::If(cond_expr, then_stmt, else_stmt) => {
-//             let labeled_then = label_statement(then_stmt.as_ref(), loop_idx, current_label);
-//             let labeled_else = else_stmt
-//                 .as_ref()
-//                 .map(|s| Box::new(label_statement(s.as_ref(), loop_idx, current_label)));
-//
-//             parser::Statement::If(cond_expr.clone(), Box::new(labeled_then), labeled_else)
-//         }
-//         stmt => stmt.clone(),
-//     }
-// }
-//
+// Second pass: Loop labeling
+pub fn label_program(program: &parser::Program) -> parser::Program {
+    let mut loop_idx = 0;
+    let current_label = None;
+
+    let parser::Program(declarations) = program;
+    let mut new_declarations = Vec::new();
+    for declaration in declarations {
+        new_declarations.push(label_declaration(
+            declaration,
+            &mut loop_idx,
+            &current_label,
+        ));
+    }
+
+    parser::Program(new_declarations)
+}
+
+pub fn label_declaration(
+    declaration: &parser::Declaration,
+    loop_idx: &mut usize,
+    current_label: &Option<String>,
+) -> parser::Declaration {
+    match declaration {
+        parser::Declaration::VarDecl(var_decl) => parser::Declaration::VarDecl(var_decl.clone()),
+        parser::Declaration::FunDecl(func_decl) => parser::Declaration::FunDecl(
+            label_function_declaration(func_decl, loop_idx, current_label),
+        ),
+    }
+}
+
+pub fn label_function_declaration(
+    function_declaration: &parser::FunctionDeclaration,
+    loop_idx: &mut usize,
+    current_label: &Option<String>,
+) -> parser::FunctionDeclaration {
+    let parser::FunctionDeclaration(identifier, parameters, body, storage_class) =
+        function_declaration;
+    if let Some(block) = body.as_ref() {
+        let new_block = label_block(block, loop_idx, current_label);
+        parser::FunctionDeclaration(
+            identifier.clone(),
+            parameters.clone(),
+            Some(new_block),
+            storage_class.clone(),
+        )
+    } else {
+        function_declaration.clone()
+    }
+}
+
+pub fn label_block(
+    block: &parser::Block,
+    loop_idx: &mut usize,
+    current_label: &Option<String>,
+) -> parser::Block {
+    let parser::Block(block_items) = block;
+    let labeled_block_items = block_items
+        .iter()
+        .map(|item| label_block_item(item, loop_idx, current_label))
+        .collect();
+
+    parser::Block(labeled_block_items)
+}
+
+pub fn label_block_item(
+    block_item: &parser::BlockItem,
+    loop_idx: &mut usize,
+    current_label: &Option<String>,
+) -> parser::BlockItem {
+    match block_item {
+        parser::BlockItem::D(declaration) => parser::BlockItem::D(declaration.clone()),
+        parser::BlockItem::S(statement) => {
+            parser::BlockItem::S(label_statement(statement, loop_idx, current_label))
+        }
+    }
+}
+
+pub fn label_statement(
+    statement: &parser::Statement,
+    loop_idx: &mut usize,
+    current_label: &Option<String>,
+) -> parser::Statement {
+    match statement {
+        parser::Statement::Break(_) => {
+            if matches!(current_label, None) {
+                panic!("Break statement outside of body");
+            }
+
+            parser::Statement::Break(current_label.clone())
+        }
+        parser::Statement::Continue(_) => {
+            if matches!(current_label, None) {
+                panic!("Continue statement outside of body");
+            }
+
+            parser::Statement::Continue(current_label.clone())
+        }
+        parser::Statement::While(cond_expr, body_stmt, _) => {
+            *loop_idx += 1;
+            let new_label = Some(format!("loop.{}", loop_idx));
+            let labeled_body = label_statement(body_stmt.as_ref(), loop_idx, &new_label);
+
+            parser::Statement::While(cond_expr.clone(), Box::new(labeled_body), new_label)
+        }
+        parser::Statement::DoWhile(body_stmt, cond_expr, _) => {
+            *loop_idx += 1;
+            let new_label = Some(format!("loop.{}", loop_idx));
+            let labeled_body = label_statement(body_stmt.as_ref(), loop_idx, &new_label);
+
+            parser::Statement::DoWhile(Box::new(labeled_body), cond_expr.clone(), new_label)
+        }
+        parser::Statement::For(init_1, init_2, init_3, body_stmt, _) => {
+            *loop_idx += 1;
+            let new_label = Some(format!("loop.{}", loop_idx));
+            let labeled_body = label_statement(body_stmt.as_ref(), loop_idx, &new_label);
+
+            parser::Statement::For(
+                init_1.clone(),
+                init_2.clone(),
+                init_3.clone(),
+                Box::new(labeled_body),
+                new_label,
+            )
+        }
+        parser::Statement::Compound(block) => {
+            parser::Statement::Compound(label_block(block, loop_idx, current_label))
+        }
+        parser::Statement::If(cond_expr, then_stmt, else_stmt) => {
+            let labeled_then = label_statement(then_stmt.as_ref(), loop_idx, current_label);
+            let labeled_else = else_stmt
+                .as_ref()
+                .map(|s| Box::new(label_statement(s.as_ref(), loop_idx, current_label)));
+
+            parser::Statement::If(cond_expr.clone(), Box::new(labeled_then), labeled_else)
+        }
+        stmt => stmt.clone(),
+    }
+}
+
 // // Third pass: Type checking
 // pub fn typecheck_program(program: &parser::Program, symbol_table: &mut SymbolTable) {
 //     let parser::Program(declarations) = program;
@@ -678,8 +700,7 @@ pub fn resolve_expr(expr: &parser::Expr, identifier_map: &mut IdentifierMap) -> 
 // Wrapper for semantic analysis passes
 pub fn semantic_analysis(ast: &parser::Program, symbol_table: &mut SymbolTable) -> parser::Program {
     let resolved_variable_ast = resolve_program(ast);
-
-    // let loop_labeling_ast = label_program(&identifier_resolution_ast);
+    let loop_labeling_ast = label_program(&resolved_variable_ast);
     // typecheck_program(&loop_labeling_ast, symbol_table);
 
     resolved_variable_ast

@@ -1,19 +1,8 @@
 use std::collections::HashMap;
 
-#[derive(PartialEq, Debug)]
-pub enum Type {
-    Int,
-    FunType(usize), // Number of parameters
-}
-
 #[derive(Debug)]
-pub enum SymbolMetadata {
-    Variable {
-        stack_offset: isize, // Currently each variable takes 4 bytes
-    },
-    Function {
-        defined: bool,
-    },
+pub struct SymbolTable {
+    pub map: HashMap<String, SymbolInfo>,
 }
 
 #[derive(Debug)]
@@ -23,8 +12,28 @@ pub struct SymbolInfo {
 }
 
 #[derive(Debug)]
-pub struct SymbolTable {
-    pub map: HashMap<String, SymbolInfo>,
+pub enum SymbolMetadata {
+    Function {
+        defined: bool, // Defined function
+        global: bool,  // External or internal linkage
+    },
+    StaticVariable {
+        global: bool,                        // External linkage or internal/none
+        initial_value: Option<InitialValue>, // None for uninitialized, Some for initialized
+    },
+    LocalVariable,
+}
+
+#[derive(Debug)]
+pub enum InitialValue {
+    Tentative,
+    Initial(i32),
+}
+
+#[derive(PartialEq, Debug)]
+pub enum Type {
+    Int,
+    FunType(usize), // Number of parameters
 }
 
 impl SymbolTable {
@@ -34,42 +43,47 @@ impl SymbolTable {
         }
     }
 
-    pub fn generate_variable(&mut self) -> String {
-        // stack offset is calculated based on the number of variables already in the map
-        let var_count = self
-            .map
-            .values()
-            .filter(|s| matches!(s.metadata, SymbolMetadata::Variable { .. }))
-            .count();
+    pub fn get(&self, name: &String) -> Option<&SymbolInfo> {
+        self.map.get(name)
+    }
 
+    pub fn unique_var_name(&self) -> String {
+        let count = self.map.len();
+        format!("var.{}", count)
+    }
+
+    pub fn insert_static_variable(
+        &mut self,
+        name: &String,
+        global: bool,
+        initial_value: Option<InitialValue>,
+    ) {
         let info = SymbolInfo {
-            metadata: SymbolMetadata::Variable {
-                stack_offset: -(((var_count + 1) * 4) as isize),
+            metadata: SymbolMetadata::StaticVariable {
+                global,
+                initial_value,
             },
             ty: Type::Int,
         };
-
-        let name = format!("var.{}", var_count + 1);
-
         self.map.insert(name.clone(), info);
-        name
     }
 
-    pub fn generate_function(&mut self, name: &String, param_count: usize, defined: bool) {
+    pub fn insert_local_variable(&mut self, name: &String) {
         let info = SymbolInfo {
-            metadata: SymbolMetadata::Function { defined },
-            ty: Type::FunType(param_count),
+            metadata: SymbolMetadata::LocalVariable,
+            ty: Type::Int,
         };
         self.map.insert(name.clone(), info);
     }
 
-    pub fn stack_size(&self) -> usize {
-        let var_count = self
-            .map
-            .values()
-            .filter(|s| matches!(s.metadata, SymbolMetadata::Variable { .. }))
-            .count();
-
-        (var_count + 1) * 4
+    pub fn insert_function(&mut self, name: &String, param_count: usize, defined: bool) {
+        let info = SymbolInfo {
+            metadata: SymbolMetadata::Function {
+                defined,
+                global: true,
+            },
+            ty: Type::FunType(param_count),
+        };
+        self.map.insert(name.clone(), info);
     }
 }
