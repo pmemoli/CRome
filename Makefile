@@ -3,4 +3,4 @@ run:
 
 test:
 	cargo build
-	./tests/test_compiler ./target/debug/crab --chapter 10 --stage parse
+	./tests/test_compiler ./target/debug/crab --chapter 10 --stage validate

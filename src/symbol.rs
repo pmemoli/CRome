@@ -1,17 +1,17 @@
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SymbolTable {
     pub map: HashMap<String, SymbolInfo>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SymbolInfo {
     pub metadata: SymbolMetadata,
     pub ty: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SymbolMetadata {
     Function {
         defined: bool, // Defined function
@@ -24,13 +24,13 @@ pub enum SymbolMetadata {
     LocalVariable,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InitialValue {
     Tentative,
     Initial(i32),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Type {
     Int,
     FunType(usize), // Number of parameters
@@ -76,12 +76,15 @@ impl SymbolTable {
         self.map.insert(name.clone(), info);
     }
 
-    pub fn insert_function(&mut self, name: &String, param_count: usize, defined: bool) {
+    pub fn insert_function(
+        &mut self,
+        name: &String,
+        param_count: usize,
+        defined: bool,
+        global: bool,
+    ) {
         let info = SymbolInfo {
-            metadata: SymbolMetadata::Function {
-                defined,
-                global: true,
-            },
+            metadata: SymbolMetadata::Function { defined, global },
             ty: Type::FunType(param_count),
         };
         self.map.insert(name.clone(), info);
