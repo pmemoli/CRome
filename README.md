@@ -14,8 +14,7 @@ The final goal is writing and compiling a simple xv6-like OS.
 
 TODO:
 
-- Solve doubts about the repeated declaration logic in the identifier pass in the S.A..
-- Chapter 10 semantic analysis.
+- Chapter 10 tacky gen.
 
 Backlog:
 

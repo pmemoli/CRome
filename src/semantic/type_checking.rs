@@ -150,16 +150,6 @@ pub fn typecheck_file_scope_variable_declaration(
     symbol_table.insert_static_variable(identifier, global, initial_value);
 }
 
-pub fn typecheck_variable_declaration(
-    variable_declaration: &parser::VariableDeclaration,
-    symbol_table: &mut SymbolTable,
-) {
-    let parser::VariableDeclaration(_, init, _) = variable_declaration;
-    if let Some(e) = init.as_ref() {
-        typecheck_expr(e, symbol_table);
-    }
-}
-
 pub fn typecheck_function_declaration(
     function_declaration: &parser::FunctionDeclaration,
     symbol_table: &mut SymbolTable,
@@ -205,6 +195,10 @@ pub fn typecheck_function_declaration(
         global,
     );
 
+    for param in parameters {
+        symbol_table.insert_local_variable(param);
+    }
+
     if let Some(block) = body.as_ref() {
         typecheck_block(block, symbol_table);
     }
@@ -245,7 +239,12 @@ pub fn typecheck_statement(statement: &parser::Statement, symbol_table: &mut Sym
         parser::Statement::For(init_1, init_2, init_3, body, _) => {
             match init_1 {
                 parser::ForInit::InitDecl(decl) => {
-                    typecheck_variable_declaration(decl, symbol_table)
+                    let parser::VariableDeclaration(_, _, storage_class) = decl;
+                    if storage_class.is_some() {
+                        panic!("For loop initializer can't have a storage class specifier");
+                    }
+
+                    typecheck_block_scope_variable_declaration(decl, symbol_table)
                 }
                 parser::ForInit::InitExp(opt_expr) => {
                     if let Some(expr) = opt_expr.as_ref() {
@@ -272,7 +271,7 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) {
     // Checks that types are used correctly
     match expr {
         parser::Expr::FunctionCall(name, arguments) => {
-            if let Some(info) = symbol_table.map.get(name) {
+            if let Some(info) = symbol_table.get(name) {
                 let f_type = &info.ty;
                 match f_type {
                     Type::Int => panic!("Variable used as function name"),
@@ -292,7 +291,7 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) {
         }
 
         parser::Expr::Var(name) => {
-            if let Some(info) = symbol_table.map.get(name) {
+            if let Some(info) = symbol_table.get(name) {
                 let f_type = &info.ty;
                 match f_type {
                     Type::FunType(_) => panic!("Function name used as variable"),
