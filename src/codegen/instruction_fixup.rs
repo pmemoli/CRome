@@ -1,34 +1,33 @@
 use super::*;
 
-pub fn instruction_fixup_program(program: &Program, symbol_table: &SymbolTable) -> Program {
-    let Program(functions) = program;
+pub fn instruction_fixup_program(program: &Program) -> Program {
+    let Program(top_level_structs) = program;
 
-    let mut fixed_functions = Vec::new();
-    for function in functions {
-        fixed_functions.push(instruction_fixup_function(function, symbol_table));
+    let mut fixed_top_level = Vec::new();
+    for top_level_struct in top_level_structs {
+        fixed_top_level.push(instruction_fixup_top_level(top_level_struct));
     }
 
-    Program(fixed_functions)
+    Program(fixed_top_level)
 }
 
-pub fn instruction_fixup_function(function: &Function, symbol_table: &SymbolTable) -> Function {
-    let Function(identifier, instructions) = function;
+pub fn instruction_fixup_top_level(top_level: &TopLevel) -> TopLevel {
+    match top_level {
+        TopLevel::Function(identifier, global, instructions) => {
+            let mut fixed_instructions = Vec::new();
+            for instruction in instructions {
+                fixed_instructions.extend(instruction_fixup_instruction(instruction));
+            }
 
-    let stack_size = SymbolTable::stack_size(symbol_table);
-    let aligned_stack_size = stack_size.next_multiple_of(16);
-
-    let mut allocated_instructions = vec![Instruction::AllocateStack(aligned_stack_size)];
-    let fixed_instructions = instructions
-        .into_iter()
-        .flat_map(instruction_fixup_instruction);
-    allocated_instructions.extend(fixed_instructions);
-
-    Function(identifier.clone(), allocated_instructions)
+            TopLevel::Function(identifier.clone(), *global, fixed_instructions)
+        }
+        t => t.clone(),
+    }
 }
 
 pub fn instruction_fixup_instruction(instruction: &Instruction) -> Vec<Instruction> {
     match instruction {
-        Instruction::Mov(src @ Operand::Stack(_), dst @ Operand::Stack(_)) => {
+        Instruction::Mov(src, dst) if src.is_memory_operand() && dst.is_memory_operand() => {
             vec![
                 Instruction::Mov(src.clone(), Operand::Reg(Reg::R10)),
                 Instruction::Mov(Operand::Reg(Reg::R10), dst.clone()),
@@ -44,16 +43,16 @@ pub fn instruction_fixup_instruction(instruction: &Instruction) -> Vec<Instructi
 
         Instruction::Binary(
             binop @ BinaryOperator::Add | binop @ BinaryOperator::Sub,
-            src @ Operand::Stack(_),
-            dst @ Operand::Stack(_),
-        ) => {
+            src,
+            dst,
+        ) if src.is_memory_operand() && dst.is_memory_operand() => {
             vec![
                 Instruction::Mov(src.clone(), Operand::Reg(Reg::R10)),
                 Instruction::Binary(binop.clone(), Operand::Reg(Reg::R10), dst.clone()),
             ]
         }
 
-        Instruction::Binary(BinaryOperator::Mult, src, dst @ Operand::Stack(_)) => {
+        Instruction::Binary(BinaryOperator::Mult, src, dst) if dst.is_memory_operand() => {
             vec![
                 Instruction::Mov(dst.clone(), Operand::Reg(Reg::R11)),
                 Instruction::Binary(BinaryOperator::Mult, src.clone(), Operand::Reg(Reg::R11)),
@@ -61,7 +60,7 @@ pub fn instruction_fixup_instruction(instruction: &Instruction) -> Vec<Instructi
             ]
         }
 
-        Instruction::Cmp(src @ Operand::Stack(_), dst @ Operand::Stack(_)) => {
+        Instruction::Cmp(src, dst) if src.is_memory_operand() && dst.is_memory_operand() => {
             vec![
                 Instruction::Mov(src.clone(), Operand::Reg(Reg::R10)),
                 Instruction::Cmp(Operand::Reg(Reg::R10), dst.clone()),
@@ -72,6 +71,13 @@ pub fn instruction_fixup_instruction(instruction: &Instruction) -> Vec<Instructi
             vec![
                 Instruction::Mov(dst.clone(), Operand::Reg(Reg::R11)),
                 Instruction::Cmp(src.clone(), Operand::Reg(Reg::R11)),
+            ]
+        }
+
+        Instruction::Push(op) if op.is_memory_operand() => {
+            vec![
+                Instruction::Mov(op.clone(), Operand::Reg(Reg::R10)),
+                Instruction::Push(Operand::Reg(Reg::R10)),
             ]
         }
 

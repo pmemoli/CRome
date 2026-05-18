@@ -3,4 +3,4 @@ run:
 
 test:
 	cargo build
-	./tests/test_compiler ./target/debug/crab --chapter 10 --stage tacky
+	./tests/test_compiler ./target/debug/crab --chapter 10

@@ -8,36 +8,61 @@ pub enum OperandSize {
 }
 
 pub fn emission_program(asm_program: &codegen::Program, symbol_table: &SymbolTable) -> String {
-    let codegen::Program(asm_functions) = asm_program;
+    let codegen::Program(asm_top_level_structs) = asm_program;
 
     let mut program = String::new();
-    for asm_function in asm_functions {
-        let function_str = emission_function(asm_function, symbol_table);
-        program.push_str(&function_str);
+    for asm_top_level_struct in asm_top_level_structs {
+        let top_level_str = emission_top_level(asm_top_level_struct, symbol_table);
+        program.push_str(&top_level_str);
     }
     program.push_str("\n    .section .note.GNU-stack,\"\",@progbits\n");
 
     program
 }
 
-pub fn emission_function(asm_function: &codegen::Function, symbol_table: &SymbolTable) -> String {
-    let codegen::Function(name, instructions) = asm_function;
+pub fn emission_top_level(asm_top_level: &codegen::TopLevel, symbol_table: &SymbolTable) -> String {
+    match asm_top_level {
+        codegen::TopLevel::Function(name, global, instructions) => {
+            let mut function = String::new();
 
-    let mut function = String::new();
+            if *global {
+                function.push_str(&format!("    .globl {}\n", name));
+            }
+            function.push_str("    .text\n");
+            function.push_str(&format!("{}:\n", name));
 
-    function.push_str(&format!("    .globl {}\n", name));
-    function.push_str(&format!("{}:\n", name));
+            // Prologue
+            function.push_str("    pushq %rbp\n");
+            function.push_str("    movq %rsp, %rbp\n");
 
-    // Prologue
-    function.push_str("    pushq %rbp\n");
-    function.push_str("    movq %rsp, %rbp\n");
+            for instruction in instructions {
+                let instruction_str = emission_instruction(instruction, symbol_table);
+                function.push_str(&format!("    {}\n", instruction_str));
+            }
 
-    for instruction in instructions {
-        let instruction_str = emission_instruction(instruction, symbol_table);
-        function.push_str(&format!("    {}\n", instruction_str));
+            function
+        }
+        codegen::TopLevel::StaticVariable(name, global, init) => {
+            let mut static_var = String::new();
+            if *global {
+                static_var.push_str(&format!("    .globl {}\n", name));
+            }
+
+            if *init == 0 {
+                static_var.push_str("    .bss\n");
+                static_var.push_str("    .align 4\n");
+                static_var.push_str(&format!("{}:\n", name));
+                static_var.push_str("    .zero 4\n");
+            } else {
+                static_var.push_str("    .data\n");
+                static_var.push_str("    .align 4\n");
+                static_var.push_str(&format!("{}:\n", name));
+                static_var.push_str(&format!("    .long {}\n", init));
+            }
+
+            static_var
+        }
     }
-
-    function
 }
 
 pub fn emission_instruction(
@@ -94,12 +119,8 @@ pub fn emission_instruction(
         codegen::Instruction::Call(label) => {
             if let Some(symbol_info) = symbol_table.map.get(label) {
                 match symbol_info.metadata {
-                    SymbolMetadata::Function { defined } => {
-                        if defined {
-                            format!("call {}", label)
-                        } else {
-                            format!("call {}@PLT", label)
-                        }
+                    SymbolMetadata::Function { .. } => {
+                        format!("call {}@PLT", label)
                     }
                     _ => panic!("Attempting to call a non-function symbol: {}", label),
                 }
@@ -156,6 +177,7 @@ pub fn emission_operand(asm_operand: &codegen::Operand, size: OperandSize) -> St
         codegen::Operand::Imm(i) => format!("${}", i),
         codegen::Operand::Reg(r) => emission_register(r, size),
         codegen::Operand::Stack(i) => format!("{}(%rbp)", i),
+        codegen::Operand::Data(label) => format!("{}(%rip)", label),
         _ => panic!("Unexpected operand type in emission"),
     }
 }

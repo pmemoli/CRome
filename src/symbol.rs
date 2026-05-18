@@ -3,6 +3,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
     pub map: HashMap<String, SymbolInfo>,
+    pub unique_counter: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -40,6 +41,7 @@ impl SymbolTable {
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
+            unique_counter: 0,
         }
     }
 
@@ -47,9 +49,9 @@ impl SymbolTable {
         self.map.get(name)
     }
 
-    pub fn unique_var_name(&self) -> String {
-        let count = self.map.len();
-        format!("var.{}", count)
+    pub fn unique_var_name(&mut self) -> String {
+        self.unique_counter += 1;
+        format!("tmp.{}", self.unique_counter)
     }
 
     pub fn insert_static_variable(

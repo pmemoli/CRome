@@ -1,6 +1,6 @@
 use crate::{symbol::SymbolTable, tacky};
 
-// mod instruction_fixup;
+mod instruction_fixup;
 mod register_allocation;
 mod tacky_to_asm;
 
@@ -75,6 +75,12 @@ pub enum Operand {
     Data(String),
 }
 
+impl Operand {
+    pub fn is_memory_operand(&self) -> bool {
+        matches!(self, Operand::Stack(_) | Operand::Data(_))
+    }
+}
+
 // cond_code = E | NE | G | GE | L | LE
 #[derive(Debug, Clone)]
 pub enum CondCode {
@@ -105,7 +111,7 @@ pub fn codegen_program(program: &tacky::Program, symbol_table: &SymbolTable) -> 
     let asm_program = tacky_to_asm::tacky_program_to_asm(program);
     let asm_program =
         register_allocation::resolve_pseudo_registers_program(&asm_program, symbol_table);
-    // let asm_program = instruction_fixup::instruction_fixup_program(&asm_program, symbol_table);
+    let asm_program = instruction_fixup::instruction_fixup_program(&asm_program);
 
     asm_program
 }

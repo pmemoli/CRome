@@ -1,14 +1,25 @@
-int hi = 2;
+int putchar(int c);
 
-int sub(int a, int b) {
-    /* Make sure arguments are passed in the right order
-     * (we can test this with subtraction since a - b  != b - a)
-     */
-    return a - b;
+int hello_world(int i) {
+    putchar(72);
+    putchar(101);
+    putchar(108);
+    putchar(108);
+    putchar(111);
+    putchar(44);
+    putchar(32);
+    putchar(87);
+    putchar(111);
+    putchar(114);
+    putchar(108);
+    putchar(100);
+    putchar(33);
+    putchar(10);
+
+    return 0;
 }
 
 int main(void) {
-    /* Make sure we can evaluate expressions passed as arguments */
-    int sum = sub(1 + 2, 1);
-    return sum;
+    hello_world(1);
+    return 0;
 }

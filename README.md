@@ -12,9 +12,11 @@ And a bunch of extra optimizations.
 
 The final goal is writing and compiling a simple xv6-like OS.  
 
+Currently in chapter 11 / 20, finished part 1.
+
 TODO:
 
-- Chapter 10 codegen.
+- Chapter 11 lexer.
 
 Backlog:
 
@@ -208,11 +210,11 @@ reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11
 ### Second pass (Register allocation)
 
 1. Replace Pseudo(identifier) with Stack(int) for variables, and Reg(reg) for temps. 
+2. Allocate stack space for each function, rounded up to a multiple of 16 bytes for alignment.
 
 ### Third pass (Instruction fix up)
 
 1. Fix up instructions so that src and dst operands are not both memory addresses
-2. Allocate stack space for each function, rounded up to a multiple of 16 bytes for alignment.
 
 ## Code Emission
 
