@@ -3,45 +3,55 @@ use crate::tacky;
 
 // First pass: Convert Tacky to ASM AST (with temp variables as pseudoregisters)
 pub fn tacky_program_to_asm(tacky_program: &tacky::Program) -> Program {
-    let tacky::Program(tacky_functions) = tacky_program;
+    let tacky::Program(tacky_top_level) = tacky_program;
 
-    let mut asm_functions = Vec::new();
-    for tacky_function in tacky_functions {
-        asm_functions.push(tacky_function_to_asm(tacky_function));
+    let mut asm_top_level = Vec::new();
+    for tacky_top_object in tacky_top_level {
+        asm_top_level.push(tacky_top_level_to_asm(tacky_top_object));
     }
-    Program(asm_functions)
+    Program(asm_top_level)
 }
 
-pub fn tacky_function_to_asm(tacky_function: &tacky::Function) -> Function {
-    let tacky::Function(tacky_identifier, tacky_arguments, tacky_instructions) = tacky_function;
+pub fn tacky_top_level_to_asm(tacky_top_level: &tacky::TopLevel) -> TopLevel {
+    match tacky_top_level {
+        tacky::TopLevel::Function(
+            tacky_identifier,
+            tacky_global,
+            tacky_arguments,
+            tacky_instructions,
+        ) => {
+            let mut asm_instructions = Vec::new();
 
-    let mut asm_instructions = Vec::new();
+            // Passes arguments as pseudovariables to later clobber caller saved registers freely
+            let reg_order = vec![Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
+            for i in 0..tacky_arguments.len() {
+                let arg = tacky_arguments[i].to_string();
 
-    // Passes arguments as pseudovariables to later clobber caller saved registers freely
-    let reg_order = vec![Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
-    for i in 0..tacky_arguments.len() {
-        let arg = tacky_arguments[i].to_string();
+                if i < reg_order.len() {
+                    let src = Operand::Reg(reg_order[i].clone());
+                    asm_instructions.push(Instruction::Mov(src, Operand::Pseudo(arg)));
+                } else {
+                    let j = i - reg_order.len();
+                    asm_instructions.push(Instruction::Mov(
+                        Operand::Stack(8 * (j + 2) as isize), // First arg is at RSP + 16 (old RBP + ret address)
+                        Operand::Pseudo(arg),
+                    ));
+                }
+            }
 
-        if i < reg_order.len() {
-            let src = Operand::Reg(reg_order[i].clone());
-            asm_instructions.push(Instruction::Mov(src, Operand::Pseudo(arg)));
-        } else {
-            let j = i - reg_order.len();
-            asm_instructions.push(Instruction::Mov(
-                Operand::Stack(8 * (j + 2) as isize), // First arg is at RSP + 16 (old RBP + ret address)
-                Operand::Pseudo(arg),
-            ));
+            for instruction in tacky_instructions {
+                let mut asm_instrs = tacky_instruction_to_asm(instruction);
+                asm_instructions.append(&mut asm_instrs);
+            }
+
+            let identifier = tacky_identifier.to_string();
+
+            TopLevel::Function(identifier, *tacky_global, asm_instructions)
+        }
+        tacky::TopLevel::StaticVariable(identifier, global, init) => {
+            TopLevel::StaticVariable(identifier.to_string(), *global, *init)
         }
     }
-
-    for instruction in tacky_instructions {
-        let mut asm_instrs = tacky_instruction_to_asm(instruction);
-        asm_instructions.append(&mut asm_instrs);
-    }
-
-    let identifier = tacky_identifier.to_string();
-
-    Function(identifier, asm_instructions)
 }
 
 pub fn tacky_instruction_to_asm(tacky_function: &tacky::Instruction) -> Vec<Instruction> {

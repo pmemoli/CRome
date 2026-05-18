@@ -1,3 +1,5 @@
+int hi = 2;
+
 int sub(int a, int b) {
     /* Make sure arguments are passed in the right order
      * (we can test this with subtraction since a - b  != b - a)

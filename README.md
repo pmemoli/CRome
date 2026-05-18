@@ -14,7 +14,7 @@ The final goal is writing and compiling a simple xv6-like OS.
 
 TODO:
 
-- Chapter 10 tacky gen.
+- Chapter 10 codegen.
 
 Backlog:
 
@@ -148,8 +148,9 @@ Check that identifier declarations do not contradict in having or not having lin
 
 ## TACKY Grammar
 ```
-program = Program(function_definition*)
-function_definition = Function(identifier, identifier* params, instruction* body)
+program = Program(top_level*)
+top_level = Function(identifier, bool global, identifier* params, instruction* body)
+    | StaticVariable(identifier, bool global, int init)
 instruction = Return(val)
     | Unary(unary_operator, val src, val dst)
     | Binary(binary_operator, val src1, val src2, val dst)
@@ -167,8 +168,9 @@ binary_operator = Add | Subtract | Multiply | Divide | Remainder | Equal | NotEq
 
 ## ASM Grammar
 ```
-program = Program(function_definition*)
-function_definition = Function(identifier name, instruction* instructions)
+program = Program(top_level*)
+top_level = Function(identifier name, bool global, instruction* instructions)
+    | StaticVariable(identifier name, bool global, int init)
 instruction = Mov(operand src, operand dst)
     | Unary(unary_operator, operand)
     | Binary(binary_operator, operand, operand)
@@ -186,7 +188,7 @@ instruction = Mov(operand src, operand dst)
     | Ret
 unary_operator = Neg | Not
 binary_operator = Add | Sub | Mult
-operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int)
+operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int) | Data(identifier)
 cond_code = E | NE | G | GE | L | LE
 reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11
 ```

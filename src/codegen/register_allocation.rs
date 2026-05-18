@@ -3,29 +3,31 @@ use crate::symbol::{SymbolMetadata, SymbolTable};
 
 // Second pass: Replace Pseudo(identifier) with Stack(int)
 pub fn resolve_pseudo_registers_program(program: &Program, symbol_table: &SymbolTable) -> Program {
-    let Program(functions) = program;
+    let Program(top_level_structs) = program;
 
-    let mut resolved_functions = Vec::new();
-    for function in functions {
-        let resolved_function = resolve_pseudo_registers_function(function, symbol_table);
-        resolved_functions.push(resolved_function);
+    let mut resolved_top_level_structs = Vec::new();
+    for top_level_struct in top_level_structs {
+        let resolved_top_level_struct = resolve_top_level(top_level_struct, symbol_table);
+        resolved_top_level_structs.push(resolved_top_level_struct);
     }
-    Program(resolved_functions)
+    Program(resolved_top_level_structs)
 }
 
-pub fn resolve_pseudo_registers_function(
-    function: &Function,
-    symbol_table: &SymbolTable,
-) -> Function {
-    let Function(identifier, instructions) = function;
+pub fn resolve_top_level(top_level: &TopLevel, symbol_table: &SymbolTable) -> TopLevel {
+    match top_level {
+        TopLevel::Function(identifier, global, instructions) => {
+            let mut resolved_instructions = Vec::new();
+            for instruction in instructions {
+                resolved_instructions.push(resolve_pseudo_registers_instruction(
+                    instruction,
+                    symbol_table,
+                ));
+            }
 
-    let mut resolved_instructions = Vec::new();
-    for instruction in instructions {
-        let resolved_instruction = resolve_pseudo_registers_instruction(instruction, symbol_table);
-        resolved_instructions.push(resolved_instruction);
+            TopLevel::Function(identifier.clone(), *global, resolved_instructions)
+        }
+        t => t.clone(),
     }
-
-    Function(identifier.clone(), resolved_instructions)
 }
 
 pub fn resolve_pseudo_registers_instruction(

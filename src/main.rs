@@ -4,13 +4,13 @@ use std::fs;
 use std::process::Command;
 use tempfile::{Builder, NamedTempFile};
 
-// mod codegen;
+mod codegen;
 // mod emission;
 mod lexer;
 mod parser;
-mod symbol;
-// mod tacky;
 mod semantic;
+mod symbol;
+mod tacky;
 
 #[derive(Parser)]
 #[command(name = "crab")]
@@ -75,24 +75,24 @@ fn main() -> Result<()> {
 
     let resolved_ast = semantic::semantic_analysis(&ast, &mut symbol_table);
 
-    println!("{:#?}", resolved_ast);
-
     if args.validate {
         return Ok(());
     }
 
-    // let tacky_ast = tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
-    //
-    // if args.tacky {
-    //     return Ok(());
-    // }
-    //
-    // let asm_ast = codegen::codegen_program(&tacky_ast, &symbol_table);
-    //
-    // if args.codegen {
-    //     return Ok(());
-    // }
-    //
+    let tacky_ast = tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
+
+    if args.tacky {
+        return Ok(());
+    }
+
+    let asm_ast = codegen::codegen_program(&tacky_ast, &symbol_table);
+
+    println!("{:#?}", asm_ast);
+
+    if args.codegen {
+        return Ok(());
+    }
+
     // let asm_str = emission::emission_program(&asm_ast, &symbol_table);
     //
     // println!("{}", asm_str);
