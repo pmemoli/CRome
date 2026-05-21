@@ -29,9 +29,9 @@ Backlog:
 ```
 program = Program(declaration*)
 declaration = FunDecl(function_declaration) | VarDecl(variable_declaration)
-variable_declaration = (identifier name, exp? init, storage_class?)
-function_declaration = (identifier name, identifier* params, 
-                        block? body, storage_class?)
+variable_declaration = (identifier name, exp? init, type var_type, storage_class?)
+function_declaration = (identifier name, identifier* params, block? body, type fun_type, storage_class?)
+type = Int | Long | FunType(type* params, type ret)
 storage_class = Static | Extern
 block = Block(block_item*)
 block_item = S(statement) | D(declaration)
@@ -46,8 +46,9 @@ statement = Return(exp)
     | DoWhile(statement body, exp condition, identifier label)
     | For(for_init init, exp? condition, exp? post, statement body, identifier label)
     | Null
-exp = Constant(int)
+exp = Constant(const)
     | Var(identifier)
+    | Cast(type target_type, exp)
     | Unary(unary_operator, exp)
     | Binary(binary_operator, exp, exp)
     | Assignment(exp, exp)
@@ -57,6 +58,7 @@ unary_operator = Complement | Negate | Not
 binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
     | Equal | NotEqual | LessThan | LessOrEqual
     | GreaterThan | GreaterOrEqual
+const = ConstInt(int) | ConstLong(int)
 ```
 
 Loop related statements are annotated in the semantic analysis pass.
@@ -67,11 +69,12 @@ Loop related statements are annotated in the semantic analysis pass.
 <declaration> ::= <variable-declaration> | <function-declaration>
 <variable-declaration> ::= { <specifier> }+ <identifier> [ "=" <exp> ] ";"
 <function-declaration> ::= { <specifier> }+ <identifier> "(" <param-list> ")" ( <block> | ";")
-<param-list> ::= "void" | "int" <identifier> { "," "int" <identifier> }
-<specifier> ::= "int" | "static" | "extern"
+<param-list> ::= "void"
+    | { <type-specifier> }+ <identifier> { "," { <type-specifier> }+ <identifier> }
+<type-specifier> ::= "int" | "long"
+<specifier> ::= <type-specifier> | "static" | "extern"
 <block> ::= "{" { <block-item> } "}"
 <block-item> ::= <statement> | <declaration>
-<declaration> ::= "int" <identifier> [ "=" <exp> ] ";"
 <for-init> ::= <variable-declaration> | [ <exp> ] ";"
 <statement> ::= "return" <exp> ";"
     | <exp> ";"
@@ -84,14 +87,18 @@ Loop related statements are annotated in the semantic analysis pass.
     | "for" "(" <for-init> [ <exp> ] ";" [ <exp> ] ")" <statement>
     | ";"
 <exp> ::= <factor> | <exp> <binop> <exp> | <exp> "?" <exp> ":" <exp>
-<factor> ::= <int> | <identifier> | <unop> <factor> | "(" <exp> ")"
+<factor> ::= <const> | <identifier>
+    | "(" { <type-specifier> }+ ")" <factor>
+    | <unop> <factor> | "(" <exp> ")"
     | <identifier> "(" [ <argument-list> ] ")"
 <argument-list> ::= <exp> { "," <exp> }
 <unop> ::= "-" | "~" | "!"
 <binop> ::= "-" | "+" | "*" | "/" | "%" | "&&" | "||"
     | "==" | "!=" | "<" | "<=" | ">" | ">=" | "="
+<const> ::= <int> | <long>
 <identifier> ::= ? An identifier token ?
-<int> ::= ? A constant token ?
+<int> ::= ? An int token ?
+<long> ::= ? An int or long token ?
 ```
 
 ## Semantic Analysis

@@ -34,7 +34,8 @@ pub enum InitialValue {
 #[derive(PartialEq, Debug, Clone)]
 pub enum Type {
     Int,
-    FunType(usize), // Number of parameters
+    Long,
+    FunType(Vec<Type>, Box<Type>), // (param_types, return_type)
 }
 
 impl SymbolTable {
@@ -81,13 +82,14 @@ impl SymbolTable {
     pub fn insert_function(
         &mut self,
         name: &String,
-        param_count: usize,
+        param_types: Vec<Type>,
+        return_type: Type,
         defined: bool,
         global: bool,
     ) {
         let info = SymbolInfo {
             metadata: SymbolMetadata::Function { defined, global },
-            ty: Type::FunType(param_count),
+            ty: Type::FunType(param_types, Box::new(return_type)),
         };
         self.map.insert(name.clone(), info);
     }

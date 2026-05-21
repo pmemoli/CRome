@@ -7,7 +7,7 @@ use tempfile::{Builder, NamedTempFile};
 // mod codegen;
 // mod emission;
 mod lexer;
-// mod parser;
+mod parser;
 // mod semantic;
 mod symbol;
 // mod tacky;
@@ -66,12 +66,14 @@ fn main() -> Result<()> {
     if args.lex {
         return Ok(());
     }
-    //
-    // let ast = parser::parse_program(&mut tokens);
-    //
-    // if args.parse {
-    //     return Ok(());
-    // }
+
+    let ast = parser::parse_program(&mut tokens);
+
+    println!("{:#?}", ast);
+
+    if args.parse {
+        return Ok(());
+    }
     //
     // let resolved_ast = semantic::semantic_analysis(&ast, &mut symbol_table);
     //

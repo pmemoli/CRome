@@ -122,8 +122,6 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
             }
         }
 
-        println!("{:?}", token_matches);
-
         // Select the maximum token by lexicographic order (length and enum)
         let max_match = token_matches.iter().max().unwrap();
 

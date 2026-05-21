@@ -1,9 +1,10 @@
 use crate::lexer::Token;
+use crate::symbol::Type;
 use std::{collections::VecDeque, panic};
 
 // program = Program(declaration*)
 #[derive(Debug, Clone)]
-pub struct Program(pub Vec<Declaration>);
+pub struct Program(Vec<Declaration>);
 
 // declaration = FunDecl(function_declaration) | VarDecl(variable_declaration)
 #[derive(Debug, Clone)]
@@ -12,18 +13,19 @@ pub enum Declaration {
     VarDecl(VariableDeclaration),
 }
 
-// function_declaration = (identifier name, identifier* params, block? body, storage_class?)
+// function_declaration = (identifier name, identifier* params, block? body, type fun_type, storage_class?)
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration(
-    pub String,
-    pub Vec<String>,
-    pub Option<Block>,
-    pub Option<StorageClass>,
+    String,
+    Vec<String>,
+    Option<Block>,
+    Type,
+    Option<StorageClass>,
 );
 
-// variable_declaration = (identifier name, exp? init, storage_class?)
+// variable_declaration = (identifier name, exp? init, type var_type, storage_class?)
 #[derive(Debug, Clone)]
-pub struct VariableDeclaration(pub String, pub Option<Expr>, pub Option<StorageClass>);
+pub struct VariableDeclaration(String, Option<Expr>, Type, Option<StorageClass>);
 
 // storage_class = Static | Extern
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,8 +84,9 @@ pub enum Statement {
     ),
 }
 
-// exp = Constant(int)
+// exp = Constant(const)
 //     | Var(identifier)
+//     | Cast(type target_type, exp)
 //     | Unary(unary_operator, exp)
 //     | Binary(binary_operator, exp, exp)
 //     | Assignment(exp, exp)
@@ -92,9 +95,10 @@ pub enum Statement {
 #[derive(Debug, Clone)]
 pub enum Expr {
     // factors
-    Constant(i32),
+    Constant(Const),
     Var(String),
     Unary(UnaryOperator, Box<Expr>),
+    Cast(Type, Box<Expr>),
 
     // compound expressions
     Binary(BinaryOperator, Box<Expr>, Box<Expr>),
@@ -131,6 +135,13 @@ pub enum BinaryOperator {
     GreaterThanOrEqual,
 }
 
+// const = ConstInt(int) | ConstLong(int)
+#[derive(Debug, Clone)]
+pub enum Const {
+    ConstInt(i32),
+    ConstLong(i64),
+}
+
 // utils
 fn expect(expected: Token, tokens: &mut VecDeque<Token>) {
     let actual = tokens.pop_front().unwrap();
@@ -154,45 +165,55 @@ fn take_token(tokens: &mut VecDeque<Token>) -> Token {
     tokens.pop_front().unwrap()
 }
 
-fn precedence(operator: &Token) -> i32 {
-    match operator {
-        Token::TwoVerticalBar => 5,
-        Token::TwoAmpersand => 10,
-        Token::TwoEqual | Token::NotEqual => 30,
-        Token::LessThan
-        | Token::LessThanOrEqual
-        | Token::GreaterThan
-        | Token::GreaterThanOrEqual => 35,
-        Token::Plus | Token::Hyphen => 45,
-        Token::Asterisk | Token::ForwardSlash | Token::Percent => 50,
-        Token::QuestionMark => 3,
-        Token::Equal => 1,
-        _ => panic!(
-            "Syntax Error: Expected a binary operator but found {:?}",
-            operator
-        ),
+impl Token {
+    pub fn is_binop(&self) -> bool {
+        matches!(
+            self,
+            Token::Plus
+                | Token::Hyphen
+                | Token::Asterisk
+                | Token::ForwardSlash
+                | Token::Percent
+                | Token::TwoAmpersand
+                | Token::TwoVerticalBar
+                | Token::TwoEqual
+                | Token::NotEqual
+                | Token::LessThan
+                | Token::LessThanOrEqual
+                | Token::GreaterThan
+                | Token::GreaterThanOrEqual
+                | Token::Equal
+                | Token::QuestionMark
+        )
     }
-}
 
-fn is_binop(token: &Token) -> bool {
-    matches!(
-        token,
-        Token::Plus
-            | Token::Hyphen
-            | Token::Asterisk
-            | Token::ForwardSlash
-            | Token::Percent
-            | Token::TwoAmpersand
-            | Token::TwoVerticalBar
-            | Token::TwoEqual
-            | Token::NotEqual
-            | Token::LessThan
+    pub fn is_storage_specifier(&self) -> bool {
+        matches!(self, Token::Static | Token::Extern)
+    }
+
+    pub fn is_type_specifier(&self) -> bool {
+        matches!(self, Token::IntKeyword | Token::LongKeyword)
+    }
+
+    pub fn precedence(&self) -> i32 {
+        match self {
+            Token::TwoVerticalBar => 5,
+            Token::TwoAmpersand => 10,
+            Token::TwoEqual | Token::NotEqual => 30,
+            Token::LessThan
             | Token::LessThanOrEqual
             | Token::GreaterThan
-            | Token::GreaterThanOrEqual
-            | Token::Equal
-            | Token::QuestionMark
-    )
+            | Token::GreaterThanOrEqual => 35,
+            Token::Plus | Token::Hyphen => 45,
+            Token::Asterisk | Token::ForwardSlash | Token::Percent => 50,
+            Token::QuestionMark => 3,
+            Token::Equal => 1,
+            _ => panic!(
+                "Syntax Error: Expected a binary operator but found {:?}",
+                self
+            ),
+        }
+    }
 }
 
 // <program> ::= { <declaration> }
@@ -212,26 +233,42 @@ pub fn parse_program(tokens: &mut VecDeque<Token>) -> Program {
 
 // <declaration> ::= <variable-declaration> | <function-declaration>
 pub fn parse_declaration(tokens: &mut VecDeque<Token>) -> Declaration {
-    let storage_class = parse_type_and_storage_class(tokens);
+    let (ty, storage_class) = parse_type_and_storage_class(tokens);
     let identifier = parse_identifier(tokens);
+
+    println!(
+        "Parsing declaration for identifier '{}', type {:?}, storage class {:?}",
+        identifier, ty, storage_class
+    );
 
     match peek(tokens) {
         // <function-declaration> ::= { <specifier> }+ <identifier> "(" <param-list> ")" ( <block> | ";")
         Token::OpenParenthesis => {
             expect(Token::OpenParenthesis, tokens);
-            let param_list = parse_param_list(tokens);
+            let params = parse_param_list(tokens);
             expect(Token::CloseParenthesis, tokens);
+
+            let param_types: Vec<Type> = params.iter().map(|(ty, _)| ty.clone()).collect();
+            let param_names: Vec<String> = params.iter().map(|(_, name)| name.clone()).collect();
+
+            let fun_type = Type::FunType(param_types, Box::new(ty.clone()));
 
             match peek(tokens) {
                 Token::OpenBrace => {
                     let block = parse_block(tokens);
-                    let decl =
-                        FunctionDeclaration(identifier, param_list, Some(block), storage_class);
+                    let decl = FunctionDeclaration(
+                        identifier,
+                        param_names,
+                        Some(block),
+                        fun_type,
+                        storage_class,
+                    );
                     Declaration::FunDecl(decl)
                 }
                 Token::Semicolon => {
                     take_token(tokens);
-                    let decl = FunctionDeclaration(identifier, param_list, None, storage_class);
+                    let decl =
+                        FunctionDeclaration(identifier, param_names, None, fun_type, storage_class);
                     Declaration::FunDecl(decl)
                 }
                 _ => panic!("Expected semicolon or definition after function definition"),
@@ -241,32 +278,71 @@ pub fn parse_declaration(tokens: &mut VecDeque<Token>) -> Declaration {
         // <variable-declaration> ::= { <specifier> }+ <identifier> [ "=" <exp> ] ";"
         Token::Semicolon => {
             take_token(tokens);
-            let decl = VariableDeclaration(identifier, None, storage_class);
+            let decl = VariableDeclaration(identifier, None, ty, storage_class);
             Declaration::VarDecl(decl)
         }
         Token::Equal => {
             take_token(tokens);
             let init_expr = parse_expr(tokens, 0);
             expect(Token::Semicolon, tokens);
-            let decl = VariableDeclaration(identifier, Some(init_expr), storage_class);
+            let decl = VariableDeclaration(identifier, Some(init_expr), ty, storage_class);
             Declaration::VarDecl(decl)
         }
         _ => panic!("Unable to parse function or variable declaration"),
     }
 }
 
-// <param-list> ::= eps | "void" | "int" <identifier> { "," "int" <identifier> }
-pub fn parse_param_list(tokens: &mut VecDeque<Token>) -> Vec<String> {
+// <type-specifier> ::= "int" | "long"
+fn parse_types(tokens: &mut VecDeque<Token>) -> Vec<Type> {
+    let mut types = Vec::new();
+    while matches!(peek(tokens), Token::IntKeyword | Token::LongKeyword) {
+        match peek(tokens) {
+            Token::IntKeyword => {
+                types.push(Type::Int);
+                take_token(tokens);
+            }
+            Token::LongKeyword => {
+                types.push(Type::Long);
+                take_token(tokens);
+            }
+            _ => {}
+        }
+    }
+    types
+}
+
+// Here it should count the type amount on each { <type-specifier> }+
+pub fn parse_type_list(types: Vec<Type>) -> Type {
+    if types.is_empty() {
+        panic!("Syntax Error: Expected a type specifier but found none");
+    } else if types.len() == 1 {
+        types[0].clone()
+    } else if types.contains(&Type::Int) && types.contains(&Type::Long) {
+        Type::Long
+    } else {
+        panic!("Syntax Error: Invalid type combination");
+    }
+}
+
+// <type-specifier> ::= "int" | "long"
+// parses { <type-specifier> }+ into a single type
+pub fn parse_type(tokens: &mut VecDeque<Token>) -> Type {
+    let types = parse_types(tokens);
+    parse_type_list(types)
+}
+
+// <param-list> ::= "void" | { <type-specifier> }+ <identifier> { "," { <type-specifier> }+ <identifier> }
+pub fn parse_param_list(tokens: &mut VecDeque<Token>) -> Vec<(Type, String)> {
     let mut param_list = Vec::new();
     match peek(tokens) {
-        Token::IntKeyword => {
-            take_token(tokens);
-            param_list.push(parse_identifier(tokens));
+        Token::IntKeyword | Token::LongKeyword => {
+            let ty = parse_type(tokens);
+            param_list.push((ty, parse_identifier(tokens)));
 
             while matches!(peek(tokens), Token::Comma) {
                 take_token(tokens);
-                expect(Token::IntKeyword, tokens);
-                param_list.push(parse_identifier(tokens));
+                let ty = parse_type(tokens);
+                param_list.push((ty, parse_identifier(tokens)));
             }
         }
         Token::VoidKeyword => {
@@ -279,9 +355,10 @@ pub fn parse_param_list(tokens: &mut VecDeque<Token>) -> Vec<String> {
     param_list
 }
 
-// <specifier> ::= "int" | "static" | "extern", not a direct translation
-pub fn parse_type_and_storage_class(tokens: &mut VecDeque<Token>) -> Option<StorageClass> {
-    let mut types = Vec::new();
+// <specifier> ::= <type-specifier> | "static" | "extern"
+// parses { <specifier> }+ into a type and storage class tuple
+pub fn parse_type_and_storage_class(tokens: &mut VecDeque<Token>) -> (Type, Option<StorageClass>) {
+    let mut types: Vec<Type> = Vec::new();
     let mut storage_classes: Vec<StorageClass> = Vec::new();
 
     loop {
@@ -289,7 +366,11 @@ pub fn parse_type_and_storage_class(tokens: &mut VecDeque<Token>) -> Option<Stor
         match next_token {
             Token::Identifier(_) => break,
             Token::IntKeyword => {
-                types.push(next_token.clone());
+                types.push(Type::Int);
+                take_token(tokens);
+            }
+            Token::LongKeyword => {
+                types.push(Type::Long);
                 take_token(tokens);
             }
             Token::Static => {
@@ -304,17 +385,15 @@ pub fn parse_type_and_storage_class(tokens: &mut VecDeque<Token>) -> Option<Stor
         }
     }
 
-    if types.len() == 0 {
-        panic!("Syntax Error: No type specified");
-    } else if types.len() > 1 {
-        panic!("Syntax Error: Multiple types specified");
-    }
+    let ty = parse_type_list(types);
 
-    match storage_classes.len() {
+    let storage_class = match storage_classes.len() {
         0 => None,
         1 => Some(storage_classes[0].clone()),
         _ => panic!("Syntax Error: Multiple storage classes specified"),
-    }
+    };
+
+    (ty, storage_class)
 }
 
 // <block> ::= "{" { <block-item> } "}"
@@ -334,7 +413,7 @@ pub fn parse_block(tokens: &mut VecDeque<Token>) -> Block {
 // <block-item> ::= <statement> | <declaration>
 pub fn parse_block_item(tokens: &mut VecDeque<Token>) -> BlockItem {
     match peek(tokens) {
-        Token::IntKeyword | Token::Static | Token::Extern => {
+        Token::IntKeyword | Token::LongKeyword | Token::Static | Token::Extern => {
             BlockItem::D(parse_declaration(tokens))
         }
         _ => BlockItem::S(parse_statement(tokens)),
@@ -431,7 +510,7 @@ pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
 // <for-init> ::= <declaration> | [ <exp> ] ";"
 pub fn parse_for_init(tokens: &mut VecDeque<Token>) -> ForInit {
     match peek(tokens) {
-        Token::IntKeyword | Token::Static | Token::Extern => {
+        Token::IntKeyword | Token::LongKeyword | Token::Static | Token::Extern => {
             let decl = parse_declaration(tokens);
             match decl {
                 Declaration::VarDecl(var_decl) => ForInit::InitDecl(var_decl),
@@ -450,16 +529,16 @@ pub fn parse_for_init(tokens: &mut VecDeque<Token>) -> ForInit {
 pub fn parse_expr(tokens: &mut VecDeque<Token>, min_prec: i32) -> Expr {
     let mut left_expr = parse_factor(tokens);
     let mut next_token = peek(tokens).clone();
-    while is_binop(&next_token) && precedence(&next_token) >= min_prec {
+    while next_token.is_binop() && next_token.precedence() >= min_prec {
         if next_token == Token::Equal {
             take_token(tokens);
-            let right_expr = parse_expr(tokens, precedence(&next_token));
+            let right_expr = parse_expr(tokens, next_token.precedence());
             left_expr = Expr::Assignment(Box::new(left_expr), Box::new(right_expr));
         } else if next_token == Token::QuestionMark {
             take_token(tokens);
             let middle_expr = parse_expr(tokens, 0);
             expect(Token::Colon, tokens);
-            let right_expr = parse_expr(tokens, precedence(&next_token));
+            let right_expr = parse_expr(tokens, next_token.precedence());
             left_expr = Expr::Conditional(
                 Box::new(left_expr),
                 Box::new(middle_expr),
@@ -467,7 +546,7 @@ pub fn parse_expr(tokens: &mut VecDeque<Token>, min_prec: i32) -> Expr {
             );
         } else {
             let operator = parse_binop(tokens);
-            let right_expr = parse_expr(tokens, precedence(&next_token) + 1);
+            let right_expr = parse_expr(tokens, next_token.precedence() + 1);
             left_expr = Expr::Binary(operator, Box::new(left_expr), Box::new(right_expr));
         }
         next_token = peek(tokens).clone();
@@ -487,13 +566,17 @@ pub fn parse_optional_expr(
     }
 }
 
-// <factor> ::= <int> | <identifier> | <unop> <factor> | "(" <exp> ")"
+// <factor> ::= <const> | <identifier>
+//     | "(" { <type-specifier> }+ ")" <factor>
+//     | <unop> <factor> | "(" <exp> ")"
 //     | <identifier> "(" [ <argument-list> ] ")"
 pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
+    println!("Parsing factor, next token is {:?}", peek(tokens));
+
     match peek(tokens) {
-        Token::Constant(i) => {
-            let expr = Expr::Constant(*i);
-            take_token(tokens);
+        Token::Constant(_) | Token::LongConstant(_) => {
+            let cons = parse_constant(tokens);
+            let expr = Expr::Constant(cons);
             expr
         }
         Token::Hyphen | Token::Tilde | Token::Exclamation => {
@@ -501,12 +584,21 @@ pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
             let inner_expr = parse_factor(tokens);
             Expr::Unary(operator, Box::new(inner_expr))
         }
-        Token::OpenParenthesis => {
-            take_token(tokens);
-            let inner_expr = parse_expr(tokens, 0);
-            expect(Token::CloseParenthesis, tokens);
-            inner_expr
-        }
+        Token::OpenParenthesis => match peek_n(tokens, 1).is_type_specifier() {
+            true => {
+                take_token(tokens);
+                let ty = parse_type(tokens);
+                expect(Token::CloseParenthesis, tokens);
+                let factor = parse_factor(tokens);
+                Expr::Cast(ty, Box::new(factor))
+            }
+            false => {
+                take_token(tokens);
+                let inner_expr = parse_expr(tokens, 0);
+                expect(Token::CloseParenthesis, tokens);
+                inner_expr
+            }
+        },
         Token::Identifier(s) => match peek_n(tokens, 1) {
             Token::OpenParenthesis => {
                 let func_name = s.to_string();
@@ -523,6 +615,22 @@ pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
             }
         },
         _ => panic!("Malformed Expression"),
+    }
+}
+
+pub fn parse_constant(tokens: &mut VecDeque<Token>) -> Const {
+    match peek(tokens) {
+        Token::Constant(i) => {
+            let cons = Const::ConstInt(*i);
+            take_token(tokens);
+            cons
+        }
+        Token::LongConstant(i) => {
+            let cons = Const::ConstLong(*i);
+            take_token(tokens);
+            cons
+        }
+        _ => panic!("Expected a constant but found {:?}", peek(tokens)),
     }
 }
 
