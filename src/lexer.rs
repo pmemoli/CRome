@@ -5,6 +5,8 @@ use std::collections::VecDeque;
 pub enum Token {
     Identifier(String),
     Constant(i32),
+    LongConstant(i64),
+    LongKeyword,
     IntKeyword,
     VoidKeyword,
     ReturnKeyword,
@@ -52,8 +54,15 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
             Token::Identifier(s.to_string())
         }),
         (Regex::new(r"^[0-9]+\b").unwrap(), |s| {
-            Token::Constant(s.parse::<i32>().unwrap())
+            match s.parse::<i32>() {
+                Ok(num) => Token::Constant(num),
+                Err(_) => Token::LongConstant(s.parse::<i64>().unwrap()),
+            }
         }),
+        (Regex::new(r"^[0-9]+[lL]\b").unwrap(), |s| {
+            Token::LongConstant(s[..s.len() - 1].parse::<i64>().unwrap())
+        }),
+        (Regex::new(r"^long\b").unwrap(), |_| Token::LongKeyword),
         (Regex::new(r"^int\b").unwrap(), |_| Token::IntKeyword),
         (Regex::new(r"^void\b").unwrap(), |_| Token::VoidKeyword),
         (Regex::new(r"^return\b").unwrap(), |_| Token::ReturnKeyword),
@@ -112,6 +121,8 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
                 token_matches.push((m_str, constructor(m_str)));
             }
         }
+
+        println!("{:?}", token_matches);
 
         // Select the maximum token by lexicographic order (length and enum)
         let max_match = token_matches.iter().max().unwrap();

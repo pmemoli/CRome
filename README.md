@@ -1,22 +1,23 @@
 # CRome
 
-C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". The project is just the the preprocessed C to ASM compiler. Preprocessor and Linker comes from gcc.
+C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". The project is just the preprocessed C to ASM compiler. Preprocessor and Linker comes from gcc.
 
 After implementing the book's subset of C, the language will be extended with cool stuff like:
 
 - ADTs and pattern matching
 - Go-like methods for structs
 - A simple rust like module system
+- SSA for optimizations
 
 And a bunch of extra optimizations.
 
-The final goal is writing and compiling a simple xv6-like OS.  
+The final goal is writing and compiling a simple xv6-like OS (RomeOS).  
 
 Currently in chapter 11 / 20, finished part 1.
 
 TODO:
 
-- Chapter 11 lexer.
+- Chapter 11 parser.
 
 Backlog:
 
