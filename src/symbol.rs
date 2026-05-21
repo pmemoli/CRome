@@ -31,7 +31,7 @@ pub enum InitialValue {
     Initial(i32),
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Eq, Hash)]
 pub enum Type {
     Int,
     Long,

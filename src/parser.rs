@@ -1,6 +1,9 @@
 use crate::lexer::Token;
 use crate::symbol::Type;
-use std::{collections::VecDeque, panic};
+use std::{
+    collections::{HashMap, VecDeque},
+    panic,
+};
 
 // program = Program(declaration*)
 #[derive(Debug, Clone)]
@@ -187,10 +190,6 @@ impl Token {
         )
     }
 
-    pub fn is_storage_specifier(&self) -> bool {
-        matches!(self, Token::Static | Token::Extern)
-    }
-
     pub fn is_type_specifier(&self) -> bool {
         matches!(self, Token::IntKeyword | Token::LongKeyword)
     }
@@ -313,10 +312,21 @@ fn parse_types(tokens: &mut VecDeque<Token>) -> Vec<Type> {
 
 // Here it should count the type amount on each { <type-specifier> }+
 pub fn parse_type_list(types: Vec<Type>) -> Type {
+    let mut type_counter: HashMap<Type, usize> = HashMap::new();
+    for ty in &types {
+        if let Some(count) = type_counter.get_mut(ty) {
+            *count += 1;
+        } else {
+            type_counter.insert(ty.clone(), 1);
+        }
+    }
+
     if types.is_empty() {
         panic!("Syntax Error: Expected a type specifier but found none");
     } else if types.len() == 1 {
         types[0].clone()
+    } else if type_counter.values().any(|&count| count > 1) {
+        panic!("Syntax Error: Duplicate type specifiers are not allowed");
     } else if types.contains(&Type::Int) && types.contains(&Type::Long) {
         Type::Long
     } else {
