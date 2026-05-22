@@ -40,7 +40,7 @@ pub fn label_function_declaration(
     loop_idx: &mut usize,
     current_label: &Option<String>,
 ) -> parser::FunctionDeclaration {
-    let parser::FunctionDeclaration(identifier, parameters, body, storage_class) =
+    let parser::FunctionDeclaration(identifier, parameters, body, ty, storage_class) =
         function_declaration;
     if let Some(block) = body.as_ref() {
         let new_block = label_block(block, loop_idx, current_label);
@@ -48,6 +48,7 @@ pub fn label_function_declaration(
             identifier.clone(),
             parameters.clone(),
             Some(new_block),
+            ty.clone(),
             storage_class.clone(),
         )
     } else {

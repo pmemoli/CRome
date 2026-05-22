@@ -7,7 +7,7 @@ use std::{
 
 // program = Program(declaration*)
 #[derive(Debug, Clone)]
-pub struct Program(Vec<Declaration>);
+pub struct Program(pub Vec<Declaration>);
 
 // declaration = FunDecl(function_declaration) | VarDecl(variable_declaration)
 #[derive(Debug, Clone)]
@@ -19,16 +19,21 @@ pub enum Declaration {
 // function_declaration = (identifier name, identifier* params, block? body, type fun_type, storage_class?)
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration(
-    String,
-    Vec<String>,
-    Option<Block>,
-    Type,
-    Option<StorageClass>,
+    pub String,
+    pub Vec<String>,
+    pub Option<Block>,
+    pub Type,
+    pub Option<StorageClass>,
 );
 
 // variable_declaration = (identifier name, exp? init, type var_type, storage_class?)
 #[derive(Debug, Clone)]
-pub struct VariableDeclaration(String, Option<Expr>, Type, Option<StorageClass>);
+pub struct VariableDeclaration(
+    pub String,
+    pub Option<Expr>,
+    pub Type,
+    pub Option<StorageClass>,
+);
 
 // storage_class = Static | Extern
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,16 +103,16 @@ pub enum Statement {
 #[derive(Debug, Clone)]
 pub enum Expr {
     // factors
-    Constant(Const),
-    Var(String),
-    Unary(UnaryOperator, Box<Expr>),
-    Cast(Type, Box<Expr>),
+    Constant(Const, Option<Type>),
+    Var(String, Option<Type>),
+    Unary(UnaryOperator, Box<Expr>, Option<Type>),
+    Cast(Type, Box<Expr>, Option<Type>),
 
     // compound expressions
-    Binary(BinaryOperator, Box<Expr>, Box<Expr>),
-    Assignment(Box<Expr>, Box<Expr>),
-    Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
-    FunctionCall(String, Vec<Expr>),
+    Binary(BinaryOperator, Box<Expr>, Box<Expr>, Option<Type>),
+    Assignment(Box<Expr>, Box<Expr>, Option<Type>),
+    Conditional(Box<Expr>, Box<Expr>, Box<Expr>, Option<Type>),
+    FunctionCall(String, Vec<Expr>, Option<Type>),
 }
 
 // unary_operator = Complement | Negate | Not
@@ -234,11 +239,6 @@ pub fn parse_program(tokens: &mut VecDeque<Token>) -> Program {
 pub fn parse_declaration(tokens: &mut VecDeque<Token>) -> Declaration {
     let (ty, storage_class) = parse_type_and_storage_class(tokens);
     let identifier = parse_identifier(tokens);
-
-    println!(
-        "Parsing declaration for identifier '{}', type {:?}, storage class {:?}",
-        identifier, ty, storage_class
-    );
 
     match peek(tokens) {
         // <function-declaration> ::= { <specifier> }+ <identifier> "(" <param-list> ")" ( <block> | ";")
@@ -543,7 +543,7 @@ pub fn parse_expr(tokens: &mut VecDeque<Token>, min_prec: i32) -> Expr {
         if next_token == Token::Equal {
             take_token(tokens);
             let right_expr = parse_expr(tokens, next_token.precedence());
-            left_expr = Expr::Assignment(Box::new(left_expr), Box::new(right_expr));
+            left_expr = Expr::Assignment(Box::new(left_expr), Box::new(right_expr), None);
         } else if next_token == Token::QuestionMark {
             take_token(tokens);
             let middle_expr = parse_expr(tokens, 0);
@@ -553,11 +553,12 @@ pub fn parse_expr(tokens: &mut VecDeque<Token>, min_prec: i32) -> Expr {
                 Box::new(left_expr),
                 Box::new(middle_expr),
                 Box::new(right_expr),
+                None,
             );
         } else {
             let operator = parse_binop(tokens);
             let right_expr = parse_expr(tokens, next_token.precedence() + 1);
-            left_expr = Expr::Binary(operator, Box::new(left_expr), Box::new(right_expr));
+            left_expr = Expr::Binary(operator, Box::new(left_expr), Box::new(right_expr), None);
         }
         next_token = peek(tokens).clone();
     }
@@ -581,18 +582,16 @@ pub fn parse_optional_expr(
 //     | <unop> <factor> | "(" <exp> ")"
 //     | <identifier> "(" [ <argument-list> ] ")"
 pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
-    println!("Parsing factor, next token is {:?}", peek(tokens));
-
     match peek(tokens) {
         Token::Constant(_) | Token::LongConstant(_) => {
             let cons = parse_constant(tokens);
-            let expr = Expr::Constant(cons);
+            let expr = Expr::Constant(cons, None);
             expr
         }
         Token::Hyphen | Token::Tilde | Token::Exclamation => {
             let operator = parse_unop(tokens);
             let inner_expr = parse_factor(tokens);
-            Expr::Unary(operator, Box::new(inner_expr))
+            Expr::Unary(operator, Box::new(inner_expr), None)
         }
         Token::OpenParenthesis => match peek_n(tokens, 1).is_type_specifier() {
             true => {
@@ -600,7 +599,7 @@ pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
                 let ty = parse_type(tokens);
                 expect(Token::CloseParenthesis, tokens);
                 let factor = parse_factor(tokens);
-                Expr::Cast(ty, Box::new(factor))
+                Expr::Cast(ty, Box::new(factor), None)
             }
             false => {
                 take_token(tokens);
@@ -616,10 +615,10 @@ pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
                 take_token(tokens);
                 let arguments = parse_argument_list(tokens);
                 expect(Token::CloseParenthesis, tokens);
-                Expr::FunctionCall(func_name, arguments)
+                Expr::FunctionCall(func_name, arguments, None)
             }
             _ => {
-                let expr = Expr::Var(s.to_string());
+                let expr = Expr::Var(s.to_string(), None);
                 take_token(tokens);
                 expr
             }

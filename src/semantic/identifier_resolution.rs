@@ -78,7 +78,7 @@ pub fn resolve_file_scope_variable_declaration(
     declaration: &parser::VariableDeclaration,
     identifier_map: &mut IdentifierMap,
 ) -> parser::VariableDeclaration {
-    let parser::VariableDeclaration(name, _, _) = declaration;
+    let parser::VariableDeclaration(name, _, _, _) = declaration;
 
     identifier_map.insert(
         name.clone(),
@@ -102,7 +102,7 @@ pub fn resolve_block_scope_declaration(
             resolve_block_scope_variable_declaration(var_decl, identifier_map, counter),
         ),
         parser::Declaration::FunDecl(func_decl) => {
-            let parser::FunctionDeclaration(_, _, init, storage_class) = func_decl;
+            let parser::FunctionDeclaration(_, _, init, _, storage_class) = func_decl;
 
             if storage_class == &Some(parser::StorageClass::Static) {
                 panic!("Functions can't have static storage class within ");
@@ -126,7 +126,7 @@ pub fn resolve_block_scope_variable_declaration(
     identifier_map: &mut IdentifierMap,
     counter: &mut usize,
 ) -> parser::VariableDeclaration {
-    let parser::VariableDeclaration(name, init, storage_class) = declaration;
+    let parser::VariableDeclaration(name, init, ty, storage_class) = declaration;
 
     if let Some(identifier_info) = identifier_map.get(name) {
         // Checks for consistent linkage (variables only have linkage if extern)
@@ -168,7 +168,7 @@ pub fn resolve_block_scope_variable_declaration(
 
         let resolved_init = init.as_ref().map(|expr| resolve_expr(expr, identifier_map));
 
-        parser::VariableDeclaration(new_name, resolved_init, storage_class.clone())
+        parser::VariableDeclaration(new_name, resolved_init, ty.clone(), storage_class.clone())
     }
 }
 
@@ -177,7 +177,7 @@ pub fn resolve_function_declaration(
     identifier_map: &mut IdentifierMap,
     counter: &mut usize,
 ) -> parser::FunctionDeclaration {
-    let parser::FunctionDeclaration(name, parameters, body, storage_class) = declaration;
+    let parser::FunctionDeclaration(name, parameters, body, ty, storage_class) = declaration;
 
     // Checks for consistent linkage (functions always have linkage)
     if let Some(identifier_info) = identifier_map.get(name) {
@@ -210,10 +210,17 @@ pub fn resolve_function_declaration(
                 name.clone(),
                 new_params,
                 Some(new_body),
+                ty.clone(),
                 storage_class.clone(),
             )
         }
-        None => parser::FunctionDeclaration(name.clone(), new_params, None, storage_class.clone()),
+        None => parser::FunctionDeclaration(
+            name.clone(),
+            new_params,
+            None,
+            ty.clone(),
+            storage_class.clone(),
+        ),
     }
 }
 
@@ -348,31 +355,36 @@ pub fn resolve_optional_expr(
 
 pub fn resolve_expr(expr: &parser::Expr, identifier_map: &mut IdentifierMap) -> parser::Expr {
     match expr {
-        parser::Expr::Assignment(left, right) => {
+        parser::Expr::Assignment(left, right, ty) => {
             let left = left.as_ref();
             let right = right.as_ref();
 
-            if !matches!(left, parser::Expr::Var(_)) {
+            if !matches!(left, parser::Expr::Var(_, _)) {
                 panic!("Invalid lvalue!");
             }
 
             parser::Expr::Assignment(
                 Box::new(resolve_expr(left, identifier_map)),
                 Box::new(resolve_expr(right, identifier_map)),
+                ty.clone(),
             )
         }
-        parser::Expr::Var(identifier) => {
+        parser::Expr::Var(identifier, ty) => {
             if let Some(identifier_info) = identifier_map.get(identifier) {
-                parser::Expr::Var(identifier_info.new_name.clone())
+                parser::Expr::Var(identifier_info.new_name.clone(), ty.clone())
             } else {
                 panic!("Undeclared variable!");
             }
         }
-        parser::Expr::Unary(op, e) => {
+        parser::Expr::Unary(op, e, ty) => {
             let e = e.as_ref();
-            parser::Expr::Unary(op.clone(), Box::new(resolve_expr(e, identifier_map)))
+            parser::Expr::Unary(
+                op.clone(),
+                Box::new(resolve_expr(e, identifier_map)),
+                ty.clone(),
+            )
         }
-        parser::Expr::Binary(op, left, right) => {
+        parser::Expr::Binary(op, left, right, ty) => {
             let left = left.as_ref();
             let right = right.as_ref();
 
@@ -380,9 +392,10 @@ pub fn resolve_expr(expr: &parser::Expr, identifier_map: &mut IdentifierMap) -> 
                 op.clone(),
                 Box::new(resolve_expr(left, identifier_map)),
                 Box::new(resolve_expr(right, identifier_map)),
+                ty.clone(),
             )
         }
-        parser::Expr::Conditional(cond, then_branch, else_branch) => {
+        parser::Expr::Conditional(cond, then_branch, else_branch, ty) => {
             let cond = cond.as_ref();
             let then_branch = then_branch.as_ref();
             let else_branch = else_branch.as_ref();
@@ -391,19 +404,28 @@ pub fn resolve_expr(expr: &parser::Expr, identifier_map: &mut IdentifierMap) -> 
                 Box::new(resolve_expr(cond, identifier_map)),
                 Box::new(resolve_expr(then_branch, identifier_map)),
                 Box::new(resolve_expr(else_branch, identifier_map)),
+                ty.clone(),
             )
         }
-        parser::Expr::FunctionCall(identifier, args) => {
+        parser::Expr::FunctionCall(identifier, args, ty) => {
             if let Some(identifier_info) = identifier_map.get(identifier) {
                 let new_func_name = identifier_info.new_name.clone();
                 let mut new_args = Vec::new();
                 for arg in args {
                     new_args.push(resolve_expr(arg, identifier_map));
                 }
-                parser::Expr::FunctionCall(new_func_name, new_args)
+                parser::Expr::FunctionCall(new_func_name, new_args, ty.clone())
             } else {
                 panic!("Undeclared function");
             }
+        }
+        parser::Expr::Cast(to_type, expr, ty) => {
+            let expr = expr.as_ref();
+            parser::Expr::Cast(
+                to_type.clone(),
+                Box::new(resolve_expr(expr, identifier_map)),
+                ty.clone(),
+            )
         }
         other => other.clone(),
     }

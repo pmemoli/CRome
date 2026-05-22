@@ -155,6 +155,7 @@ Check that identifier declarations do not contradict in having or not having lin
 1. Check that function declarations are consistent everywhere, and adds name to symbol table
 2. A function can't be called with the wrong number of arguments
 3. A function can't be defined more than once (not really type checking but easy to implement here)
+4. Annotate the AST with the type of each expression, and insert corresponding casts where necessary.
 
 ## TACKY Grammar
 ```
