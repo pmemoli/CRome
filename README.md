@@ -17,7 +17,7 @@ Currently in chapter 11 / 20, finished part 1.
 
 TODO:
 
-- Chapter 11 semantic analysis.
+- Chapter 11 semantic analysis (rough!).
 
 Backlog:
 

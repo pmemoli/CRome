@@ -128,13 +128,18 @@ pub enum UnaryOperator {
 //     | GreaterThan | GreaterOrEqual
 #[derive(Debug, Clone)]
 pub enum BinaryOperator {
+    // Arithmetic
     Add,
     Subtract,
     Multiply,
     Divide,
     Remainder,
+
+    // Logical
     And,
     Or,
+
+    // Comparison
     Equal,
     NotEqual,
     LessThan,

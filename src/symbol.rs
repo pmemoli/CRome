@@ -28,7 +28,12 @@ pub enum SymbolMetadata {
 #[derive(Debug, Clone)]
 pub enum InitialValue {
     Tentative,
-    Initial(i32),
+    Initial(StaticInit),
+}
+
+pub enum StaticInit {
+    IntInit(i32),
+    LongInit(i64),
 }
 
 #[derive(PartialEq, Debug, Clone, Eq, Hash)]
@@ -60,21 +65,22 @@ impl SymbolTable {
         name: &String,
         global: bool,
         initial_value: Option<InitialValue>,
+        ty: &Type,
     ) {
         let info = SymbolInfo {
             metadata: SymbolMetadata::StaticVariable {
                 global,
                 initial_value,
             },
-            ty: Type::Int,
+            ty: ty.clone(),
         };
         self.map.insert(name.clone(), info);
     }
 
-    pub fn insert_local_variable(&mut self, name: &String) {
+    pub fn insert_local_variable(&mut self, name: &String, ty: &Type) {
         let info = SymbolInfo {
             metadata: SymbolMetadata::LocalVariable,
-            ty: Type::Int,
+            ty: ty.clone(),
         };
         self.map.insert(name.clone(), info);
     }
