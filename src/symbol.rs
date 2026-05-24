@@ -31,6 +31,7 @@ pub enum InitialValue {
     Initial(StaticInit),
 }
 
+#[derive(Debug, Clone)]
 pub enum StaticInit {
     IntInit(i32),
     LongInit(i64),
@@ -85,17 +86,10 @@ impl SymbolTable {
         self.map.insert(name.clone(), info);
     }
 
-    pub fn insert_function(
-        &mut self,
-        name: &String,
-        param_types: Vec<Type>,
-        return_type: Type,
-        defined: bool,
-        global: bool,
-    ) {
+    pub fn insert_function(&mut self, name: &String, ty: &Type, defined: bool, global: bool) {
         let info = SymbolInfo {
             metadata: SymbolMetadata::Function { defined, global },
-            ty: Type::FunType(param_types, Box::new(return_type)),
+            ty: ty.clone(),
         };
         self.map.insert(name.clone(), info);
     }

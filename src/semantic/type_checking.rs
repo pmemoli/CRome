@@ -72,13 +72,14 @@ pub fn typecheck_block_scope_variable_declaration(
 ) -> parser::VariableDeclaration {
     let parser::VariableDeclaration(identifier, init, ty, storage_class) = variable_declaration;
 
-    // Populate the symbol table and check for invalid storage class specifiers and incompatible
-    // declarations
-    match storage_class {
+    // Populate the symbol table, type/specifier check and process the initializer
+    let new_init = match storage_class {
         Some(parser::StorageClass::Extern) => {
             if init.is_some() {
                 panic!("Local variable with extern storage duration can't be initialized");
             }
+
+            // Only extern values can be redeclared in block scope
             if let Some(symbol_info) = symbol_table.get(identifier) {
                 let prev_ty = &symbol_info.ty;
                 if prev_ty != ty {
@@ -87,49 +88,62 @@ pub fn typecheck_block_scope_variable_declaration(
             } else {
                 symbol_table.insert_static_variable(identifier, true, None, ty);
             }
+
+            None
         }
         Some(parser::StorageClass::Static) => {
+            // Convert the constant expression directly
+            let new_init = init.as_ref().map(|e| static_convert_constant_expr(e, ty));
+
             let initial_value = match init.as_ref() {
                 Some(parser::Expr::Constant(cons, _)) => {
-                    InitialValue::Initial(constant_to_static_init(&convert_constant(cons, ty)))
+                    InitialValue::Initial(constant_to_static_init(cons))
                 }
-                Some(_) => panic!("Non-constant expression used to initialize static variable"),
                 None => InitialValue::Initial(StaticInit::IntInit(0)),
+                Some(_) => panic!("Non-constant expression used to initialize static variable"),
             };
 
             symbol_table.insert_static_variable(identifier, false, Some(initial_value), ty);
+
+            new_init
         }
         None => {
             symbol_table.insert_local_variable(identifier, ty);
+
+            // Cast the typed init to the variable type if it exists
+            let typed_init = init.as_ref().map(|e| typecheck_expr(e, symbol_table));
+            typed_init.as_ref().map(|e| convert_to(e, ty.clone()))
         }
     };
 
-    // Cast the typed init to the variable type if it exists
-    let typed_init = init.as_ref().map(|e| typecheck_expr(e, symbol_table));
-    let converted_init = typed_init.as_ref().map(|e| convert_to(e, ty.clone()));
-
     parser::VariableDeclaration(
         identifier.clone(),
-        converted_init,
+        new_init,
         ty.clone(),
         storage_class.clone(),
     )
 }
 
-pub fn convert_constant(cons: &parser::Const, ty: &Type) -> parser::Const {
-    match cons {
+pub fn static_convert_constant_expr(expr: &parser::Expr, ty: &Type) -> parser::Expr {
+    let parser::Expr::Constant(cons, _) = expr else {
+        panic!("Expected constant expression for static variable initialization")
+    };
+
+    let (new_cons, new_ty) = match cons {
         parser::Const::ConstInt(i) => match ty {
-            Type::Int => parser::Const::ConstInt(*i),
-            Type::Long => parser::Const::ConstLong(*i as i64),
-            _ => panic!("Unsupported type for file scope variable initialization"),
+            Type::Int => (parser::Const::ConstInt(*i), Type::Int),
+            Type::Long => (parser::Const::ConstLong(*i as i64), Type::Long),
+            _ => panic!("Unsupported type for static variable initialization"),
         },
 
         parser::Const::ConstLong(i) => match ty {
-            Type::Int => parser::Const::ConstInt(*i as i32),
-            Type::Long => parser::Const::ConstLong(*i),
-            _ => panic!("Unsupported type for file scope variable initialization"),
+            Type::Int => (parser::Const::ConstInt(*i as i32), Type::Int),
+            Type::Long => (parser::Const::ConstLong(*i), Type::Long),
+            _ => panic!("Unsupported type for static variable initialization"),
         },
-    }
+    };
+
+    parser::Expr::Constant(new_cons, Some(new_ty))
 }
 
 pub fn constant_to_static_init(cons: &parser::Const) -> StaticInit {
@@ -145,11 +159,14 @@ pub fn typecheck_file_scope_variable_declaration(
 ) -> parser::VariableDeclaration {
     let parser::VariableDeclaration(identifier, init, ty, storage_class) = variable_declaration;
 
+    // Convert the init directly
+    let new_init = init.as_ref().map(|e| static_convert_constant_expr(e, ty));
+
     // Resolve initial constant value and convert it if necessary
-    let mut initial_value = match init.as_ref() {
-        Some(parser::Expr::Constant(cons, _)) => Some(InitialValue::Initial(
-            constant_to_static_init(&convert_constant(cons, ty)),
-        )),
+    let mut initial_value = match new_init.as_ref() {
+        Some(parser::Expr::Constant(cons, _)) => {
+            Some(InitialValue::Initial(constant_to_static_init(cons)))
+        }
         None => match storage_class {
             Some(parser::StorageClass::Extern) => None,
             _ => Some(InitialValue::Tentative),
@@ -157,11 +174,11 @@ pub fn typecheck_file_scope_variable_declaration(
         Some(_) => panic!("Non-constant expression used to initialize static variable"),
     };
 
-    // Populate the symbol table and check for incompatible declarations and invalid storage class
-    // specifiers.
+    // Populate the symbol table and type/specifier check
     let static_specifier = matches!(storage_class, Some(parser::StorageClass::Static));
     let extern_specifier = matches!(storage_class, Some(parser::StorageClass::Extern));
     let mut global = !static_specifier;
+
     if let Some(symbol_info) = symbol_table.map.get(identifier) {
         if symbol_info.ty != ty.clone() {
             panic!("Incompatible type declarations")
@@ -201,13 +218,9 @@ pub fn typecheck_file_scope_variable_declaration(
 
     symbol_table.insert_static_variable(identifier, global, initial_value, ty);
 
-    // Cast the typed init to the variable type if it exists (not None)
-    let typed_init = init.as_ref().map(|e| typecheck_expr(e, symbol_table));
-    let converted_init = typed_init.as_ref().map(|e| convert_to(e, ty.clone()));
-
     parser::VariableDeclaration(
         identifier.clone(),
-        converted_init,
+        new_init,
         ty.clone(),
         storage_class.clone(),
     )
@@ -217,18 +230,19 @@ pub fn typecheck_function_declaration(
     function_declaration: &parser::FunctionDeclaration,
     symbol_table: &mut SymbolTable,
 ) -> parser::FunctionDeclaration {
-    let parser::FunctionDeclaration(name, parameters, body, ret_ty, storage_class) =
+    let parser::FunctionDeclaration(name, parameters, body, ty, storage_class) =
         function_declaration;
+
     let mut already_defined = false;
     let static_specifier = matches!(storage_class, Some(parser::StorageClass::Static));
 
-    // Unless previous declaration is static
+    // Unless previous declaration is static, the function is global w/o static
     let mut global = !static_specifier;
 
     // 1. Check that function declarations types and linkage is consistent everywhere.
     // 2. Check that the function is not defined more than once.
     if let Some(symbol_info) = symbol_table.map.get(name) {
-        if symbol_info.ty != Type::FunType(parameters.len()) {
+        if symbol_info.ty != ty.clone() {
             panic!("Incompatible declarations")
         }
 
@@ -252,25 +266,24 @@ pub fn typecheck_function_declaration(
         }
     }
 
-    symbol_table.insert_function(
-        name,
-        parameters.len(),
-        already_defined || body.is_some(),
-        global,
-    );
+    let Type::FunType(param_types, ret_ty) = ty else {
+        panic!("Function declaration with non-function type")
+    };
 
-    for param in parameters {
-        symbol_table.insert_local_variable(param);
+    symbol_table.insert_function(name, ty, already_defined || body.is_some(), global);
+
+    for (param, param_ty) in parameters.iter().zip(param_types.iter()) {
+        symbol_table.insert_local_variable(param, param_ty);
     }
 
-    if let Some(block) = body.as_ref() {
-        typecheck_block(block, symbol_table, &Some(ret_ty.clone()));
-    }
+    let typechecked_body = body
+        .as_ref()
+        .map(|b| typecheck_block(b, symbol_table, &Some(ret_ty.as_ref().clone())));
 
     parser::FunctionDeclaration(
         name.clone(),
         parameters.clone(),
-        body.clone(),
+        typechecked_body,
         ty.clone(),
         storage_class.clone(),
     )
@@ -442,11 +455,11 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
 
         parser::Expr::Unary(op, inner, _) => {
             let typed_inner = typecheck_expr(inner.as_ref(), symbol_table);
-            let new_expr = parser::Expr::Unary(op.clone(), Box::new(typed_inner), None);
+            let new_expr = parser::Expr::Unary(op.clone(), Box::new(typed_inner.clone()), None);
 
             match op {
                 parser::UnaryOperator::Not => set_type(&new_expr.clone(), Type::Int),
-                _ => set_type(&new_expr.clone(), get_type(&new_expr)),
+                _ => set_type(&new_expr.clone(), get_type(&typed_inner)),
             }
         }
 
@@ -466,9 +479,9 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
                     set_type(&new_expr, Type::Int)
                 }
                 _ => {
-                    let common_ty = get_common_type(left, right);
-                    let cast_left = convert_to(left, common_ty.clone());
-                    let cast_right = convert_to(right, common_ty.clone());
+                    let common_ty = get_common_type(&typed_left, &typed_right);
+                    let cast_left = convert_to(&typed_left, common_ty.clone());
+                    let cast_right = convert_to(&typed_right, common_ty.clone());
                     let new_expr = parser::Expr::Binary(
                         op.clone(),
                         Box::new(cast_left),
@@ -548,7 +561,8 @@ pub fn get_type(expr: &parser::Expr) -> Type {
         | parser::Expr::Unary(_, _, Some(ty))
         | parser::Expr::Binary(_, _, _, Some(ty))
         | parser::Expr::Conditional(_, _, _, Some(ty))
-        | parser::Expr::Cast(_, _, Some(ty)) => ty.clone(),
+        | parser::Expr::Cast(_, _, Some(ty))
+        | parser::Expr::Constant(_, Some(ty)) => ty.clone(),
         _ => panic!("Expression without type annotation"),
     }
 }
