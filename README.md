@@ -17,7 +17,7 @@ Currently in chapter 11 / 20, finished part 1.
 
 TODO:
 
-- Chapter 11 tacky
+- Chapter 11 codegen
 
 Backlog:
 
@@ -161,8 +161,10 @@ Check that identifier declarations do not contradict in having or not having lin
 ```
 program = Program(top_level*)
 top_level = Function(identifier, bool global, identifier* params, instruction* body)
-    | StaticVariable(identifier, bool global, int init)
+    | StaticVariable(identifier, bool global, type t, static_init init)
 instruction = Return(val)
+    | SignExtend(val src, val dst)
+    | Truncate(val src, val dst)
     | Unary(unary_operator, val src, val dst)
     | Binary(binary_operator, val src1, val src2, val dst)
     | Copy(val src, val dst)
@@ -171,7 +173,7 @@ instruction = Return(val)
     | JumpIfNotZero(val condition, identifier target)
     | Label(identifier)
     | FunCall(identifier fun_name, val* args, val dst)
-val = Constant(int) | Var(identifier)
+val = Constant(const) | Var(identifier)
 unary_operator = Complement | Negate | Not
 binary_operator = Add | Subtract | Multiply | Divide | Remainder | Equal | NotEqual
     | LessThan | LessOrEqual | GreaterThan | GreaterOrEqual

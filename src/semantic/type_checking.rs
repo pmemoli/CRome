@@ -553,20 +553,6 @@ pub fn set_type(expr: &parser::Expr, ty: Type) -> parser::Expr {
     expr
 }
 
-pub fn get_type(expr: &parser::Expr) -> Type {
-    match expr {
-        parser::Expr::FunctionCall(_, _, Some(ty))
-        | parser::Expr::Var(_, Some(ty))
-        | parser::Expr::Assignment(_, _, Some(ty))
-        | parser::Expr::Unary(_, _, Some(ty))
-        | parser::Expr::Binary(_, _, _, Some(ty))
-        | parser::Expr::Conditional(_, _, _, Some(ty))
-        | parser::Expr::Cast(_, _, Some(ty))
-        | parser::Expr::Constant(_, Some(ty)) => ty.clone(),
-        _ => panic!("Expression without type annotation"),
-    }
-}
-
 pub fn get_common_type(left: &parser::Expr, right: &parser::Expr) -> Type {
     let left_ty = get_type(left);
     let right_ty = get_type(right);

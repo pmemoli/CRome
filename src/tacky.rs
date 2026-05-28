@@ -1,31 +1,35 @@
-use crate::symbol::{InitialValue, SymbolMetadata, SymbolTable};
-
 use crate::parser;
+use crate::semantic::get_type;
+use crate::symbol::{InitialValue, StaticInit, SymbolMetadata, SymbolTable, Type};
 
 // program = Program(top_level*)
 #[derive(Debug)]
 pub struct Program(pub Vec<TopLevel>);
 
 // top_level = Function(identifier, bool global, identifier* params, instruction* body)
-//     | StaticVariable(identifier, bool global, int init)
+//     | StaticVariable(identifier, bool global, type t, static_init init)
 #[derive(Debug)]
 pub enum TopLevel {
     Function(String, bool, Vec<String>, Vec<Instruction>),
-    StaticVariable(String, bool, i32),
+    StaticVariable(String, bool, Type, StaticInit),
 }
 
 // instruction = Return(val)
-// | Unary(unary_operator, val src, val dst)
-// | Binary(binary_operator, val src1, val src2, val dst)
-// | Copy(val src, val dst)
-// | Jump(identifier target)
-// | JumpIfZero(val condition, identifier target)
-// | JumpIfNotZero(val condition, identifier target)
-// | Label(identifier)
-// | FunCall(identifier fun_name, val* args, val dst)
+//     | SignExtend(val src, val dst)
+//     | Truncate(val src, val dst)
+//     | Unary(unary_operator, val src, val dst)
+//     | Binary(binary_operator, val src1, val src2, val dst)
+//     | Copy(val src, val dst)
+//     | Jump(identifier target)
+//     | JumpIfZero(val condition, identifier target)
+//     | JumpIfNotZero(val condition, identifier target)
+//     | Label(identifier)
+//     | FunCall(identifier fun_name, val* args, val dst)
 #[derive(Debug)]
 pub enum Instruction {
     Return(Val),
+    SignExtend(Val, Val),
+    Truncate(Val, Val),
     Unary(UnaryOperator, Val, Val),
     Binary(BinaryOperator, Val, Val, Val),
     Copy(Val, Val),
@@ -36,10 +40,10 @@ pub enum Instruction {
     FunCall(String, Vec<Val>, Val),
 }
 
-// val = Constant(int) | Var(identifier)
+// val = Constant(const) | Var(identifier)
 #[derive(Debug, Clone)]
 pub enum Val {
-    Constant(i32),
+    Constant(parser::Const),
     Var(String),
 }
 
@@ -68,9 +72,9 @@ pub enum BinaryOperator {
     GreaterOrEqual,
 }
 
-pub fn generate_unique_variable(symbol_table: &mut SymbolTable) -> String {
+pub fn generate_unique_variable(symbol_table: &mut SymbolTable, ty: &Type) -> String {
     let var_name = symbol_table.unique_var_name();
-    symbol_table.insert_local_variable(&var_name);
+    symbol_table.insert_local_variable(&var_name, ty);
     var_name
 }
 
@@ -102,6 +106,8 @@ pub fn convert_symbols_to_tacky(symbol_table: &mut SymbolTable) -> Vec<TopLevel>
     let mut tacky_defs = Vec::new();
 
     for (name, info) in &symbol_table.map {
+        let ty = info.ty.clone();
+
         if let SymbolMetadata::StaticVariable {
             global,
             initial_value,
@@ -109,11 +115,22 @@ pub fn convert_symbols_to_tacky(symbol_table: &mut SymbolTable) -> Vec<TopLevel>
         {
             match initial_value {
                 Some(InitialValue::Tentative) => {
-                    tacky_defs.push(TopLevel::StaticVariable(name.clone(), global, 0))
+                    let static_init = match ty {
+                        Type::Int => StaticInit::IntInit(0),
+                        Type::Long => StaticInit::LongInit(0),
+                        _ => panic!("Unsupported type for tentative static variable."),
+                    };
+
+                    tacky_defs.push(TopLevel::StaticVariable(
+                        name.clone(),
+                        global,
+                        ty,
+                        static_init,
+                    ))
                 }
-                Some(InitialValue::Initial(i)) => {
-                    tacky_defs.push(TopLevel::StaticVariable(name.clone(), global, i))
-                }
+                Some(InitialValue::Initial(static_init)) => tacky_defs.push(
+                    TopLevel::StaticVariable(name.clone(), global, ty, static_init),
+                ),
                 None => {}
             }
         }
@@ -140,7 +157,7 @@ pub fn ast_function_declaration_to_tacky(
     symbol_table: &mut SymbolTable,
     label_idx: &mut usize,
 ) -> Option<TopLevel> {
-    let parser::FunctionDeclaration(identifier, parameters, block, _) = ast_function;
+    let parser::FunctionDeclaration(identifier, parameters, block, _, _) = ast_function;
 
     let mut instructions = Vec::new();
 
@@ -155,7 +172,9 @@ pub fn ast_function_declaration_to_tacky(
     // Only emit code for defined functions.
     if let Some(block) = block.as_ref() {
         ast_block_to_tacky(block, &mut instructions, symbol_table, label_idx);
-        instructions.push(Instruction::Return(Val::Constant(0)));
+        instructions.push(Instruction::Return(Val::Constant(parser::Const::ConstInt(
+            0,
+        ))));
         Some(TopLevel::Function(
             identifier.clone(),
             global.clone(),
@@ -173,7 +192,7 @@ pub fn ast_block_scope_variable_declaration_to_tacky(
     symbol_table: &mut SymbolTable,
     label_idx: &mut usize,
 ) {
-    let parser::VariableDeclaration(name, init, storage_class) = ast_declaration;
+    let parser::VariableDeclaration(name, init, _, storage_class) = ast_declaration;
 
     if storage_class.is_some() {
         return; // Static variables are processed in a second pass
@@ -365,17 +384,19 @@ pub fn ast_expression_to_tacky(
     symbol_table: &mut SymbolTable,
     label_idx: &mut usize,
 ) -> Val {
+    let e_type = &get_type(ast_expr);
+
     match ast_expr {
-        parser::Expr::Constant(i) => Val::Constant(*i),
-        parser::Expr::Unary(op, expr) => {
+        parser::Expr::Constant(i, _) => Val::Constant(i.clone()),
+        parser::Expr::Unary(op, expr, _) => {
             let src = ast_expression_to_tacky(expr, instructions, symbol_table, label_idx);
-            let dst_name = generate_unique_variable(symbol_table);
+            let dst_name = generate_unique_variable(symbol_table, e_type);
             let dst = Val::Var(dst_name);
             let tacky_op = ast_unop_to_tacky(op);
             instructions.push(Instruction::Unary(tacky_op, src, dst.clone()));
             dst
         }
-        parser::Expr::Binary(op, left_expr, right_expr) => match op {
+        parser::Expr::Binary(op, left_expr, right_expr, _) => match op {
             // Short circuit binary operators
             parser::BinaryOperator::And | parser::BinaryOperator::Or => {
                 *label_idx += 1;
@@ -402,20 +423,26 @@ pub fn ast_expression_to_tacky(
                     format!("false_result.{}", current_label_idx),
                 ));
 
-                let dst_name = generate_unique_variable(symbol_table);
+                let dst_name = generate_unique_variable(symbol_table, e_type);
                 let dst = Val::Var(dst_name);
 
                 instructions.push(Instruction::Label(format!(
                     "true_result.{}",
                     current_label_idx
                 )));
-                instructions.push(Instruction::Copy(Val::Constant(1), dst.clone()));
+                instructions.push(Instruction::Copy(
+                    Val::Constant(parser::Const::ConstInt(1)),
+                    dst.clone(),
+                ));
                 instructions.push(Instruction::Jump(format!("end.{}", current_label_idx)));
                 instructions.push(Instruction::Label(format!(
                     "false_result.{}",
                     current_label_idx
                 )));
-                instructions.push(Instruction::Copy(Val::Constant(0), dst.clone()));
+                instructions.push(Instruction::Copy(
+                    Val::Constant(parser::Const::ConstInt(0)),
+                    dst.clone(),
+                ));
                 instructions.push(Instruction::Label(format!("end.{}", current_label_idx)));
                 dst
             }
@@ -424,16 +451,16 @@ pub fn ast_expression_to_tacky(
                     ast_expression_to_tacky(left_expr, instructions, symbol_table, label_idx);
                 let val_2 =
                     ast_expression_to_tacky(right_expr, instructions, symbol_table, label_idx);
-                let dst_name = generate_unique_variable(symbol_table);
+                let dst_name = generate_unique_variable(symbol_table, e_type);
                 let dst = Val::Var(dst_name);
                 let tacky_op = ast_binop_to_tacky(op);
                 instructions.push(Instruction::Binary(tacky_op, val_1, val_2, dst.clone()));
                 dst
             }
         },
-        parser::Expr::Var(identifier) => Val::Var(identifier.to_string()),
-        parser::Expr::Assignment(left, right) => {
-            let parser::Expr::Var(v) = left.as_ref() else {
+        parser::Expr::Var(identifier, _) => Val::Var(identifier.to_string()),
+        parser::Expr::Assignment(left, right, _) => {
+            let parser::Expr::Var(v, _) = left.as_ref() else {
                 panic!("Expected var on left hand side of assignment.")
             };
 
@@ -442,10 +469,10 @@ pub fn ast_expression_to_tacky(
             instructions.push(Instruction::Copy(value, dst.clone()));
             dst
         }
-        parser::Expr::Conditional(cond_expr, then_expr, else_expr) => {
+        parser::Expr::Conditional(cond_expr, then_expr, else_expr, _) => {
             *label_idx += 1;
             let current_label_idx = *label_idx;
-            let dst_name = generate_unique_variable(symbol_table);
+            let dst_name = generate_unique_variable(symbol_table, e_type);
             let dst = Val::Var(dst_name);
 
             let cond_value =
@@ -468,7 +495,7 @@ pub fn ast_expression_to_tacky(
             instructions.push(Instruction::Label(format!("end.{}", current_label_idx)));
             dst
         }
-        parser::Expr::FunctionCall(fun_name, args) => {
+        parser::Expr::FunctionCall(fun_name, args, _) => {
             let mut arg_values = Vec::new();
             for arg in args {
                 arg_values.push(ast_expression_to_tacky(
@@ -479,13 +506,36 @@ pub fn ast_expression_to_tacky(
                 ))
             }
 
-            let dst_name = generate_unique_variable(symbol_table);
+            let dst_name = generate_unique_variable(symbol_table, e_type);
             let dst = Val::Var(dst_name);
             instructions.push(Instruction::FunCall(
                 fun_name.clone(),
                 arg_values,
                 dst.clone(),
             ));
+
+            dst
+        }
+        parser::Expr::Cast(t, inner, _) => {
+            let result = ast_expression_to_tacky(inner, instructions, symbol_table, label_idx);
+            let inner_type = &get_type(inner);
+
+            if t == inner_type {
+                return result;
+            };
+
+            let dst_name = generate_unique_variable(symbol_table, e_type);
+            let dst = Val::Var(dst_name);
+
+            match (inner_type, t) {
+                (Type::Int, Type::Long) => {
+                    instructions.push(Instruction::SignExtend(result, dst.clone()))
+                }
+                (Type::Long, Type::Int) => {
+                    instructions.push(Instruction::Truncate(result, dst.clone()))
+                }
+                _ => panic!("Unsupported cast from {:?} to {:?}", get_type(inner), t),
+            };
 
             dst
         }
