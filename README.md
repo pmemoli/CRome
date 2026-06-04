@@ -182,20 +182,20 @@ binary_operator = Add | Subtract | Multiply | Divide | Remainder | Equal | NotEq
 ## ASM Grammar
 ```
 program = Program(top_level*)
-top_level = Function(identifier name, bool global, instruction* instructions)
-    | StaticVariable(identifier name, bool global, int init)
-instruction = Mov(operand src, operand dst)
-    | Unary(unary_operator, operand)
-    | Binary(binary_operator, operand, operand)
-    | Cmp(operand, operand)
-    | Idiv(operand)
-    | Cdq
+assembly_type = Longword | Quadword
+top_level = Function(identifier, bool global, identifier* params, instruction* body)
+    | StaticVariable(identifier, bool global, type t, static_init init)
+instruction = Mov(assembly_type, operand src, operand dst)
+    | Movsx(operand src, operand dst)
+    | Unary(unary_operator, assembly_type, operand)
+    | Binary(binary_operator, assembly_type, operand, operand)
+    | Cmp(assembly_type, operand, operand)
+    | Idiv(assembly_type, operand)
+    | Cdq(assembly_type)
     | Jmp(identifier)
     | JmpCC(cond_code, identifier)
     | SetCC(cond_code, operand)
     | Label(identifier)
-    | AllocateStack(int)
-    | DeallocateStack(int)
     | Push(operand)
     | Call(identifier)
     | Ret
@@ -203,7 +203,7 @@ unary_operator = Neg | Not
 binary_operator = Add | Sub | Mult
 operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int) | Data(identifier)
 cond_code = E | NE | G | GE | L | LE
-reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11
+reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11 | SP
 ```
 
 . System V 64 bit calling ABI is implemented in this pass:
@@ -212,6 +212,8 @@ reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11
     - caller handles arg cleanup
     - 16 byte aligned before call.
     - .text, .data, .rodata and .bss semantics are implemented
+
+. Assembly types are deduced from tacky values 
 
 ### First pass (Tacky to ASM)
 

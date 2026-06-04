@@ -1,4 +1,7 @@
-use crate::{symbol::SymbolTable, tacky};
+use crate::{
+    symbol::{StaticInit, SymbolTable},
+    tacky,
+};
 
 mod instruction_fixup;
 mod register_allocation;
@@ -8,43 +11,47 @@ mod tacky_to_asm;
 #[derive(Debug)]
 pub struct Program(pub Vec<TopLevel>);
 
+// assembly_type = Longword | Quadword
+pub enum AssemblyType {
+    Longword,
+    Quadword,
+}
+
 // top_level = Function(identifier name, bool global, instruction* instructions)
-//     | StaticVariable(identifier name, bool global, int init)
+//     | StaticVariable(identifier name, bool global, int alignment, static_init init)
 #[derive(Debug, Clone)]
 pub enum TopLevel {
     Function(String, bool, Vec<Instruction>),
-    StaticVariable(String, bool, i32),
+    StaticVariable(String, bool, isize, StaticInit),
 }
 
-// instruction = Mov(operand src, operand dst)
-//     | Unary(unary_operator, operand)
-//     | Binary(binary_operator, operand, operand)
-//     | Cmp(operand, operand)
-//     | Idiv(operand)
-//     | Cdq
+// instruction = Mov(assembly_type, operand src, operand dst)
+//     | Movsx(operand src, operand dst)
+//     | Unary(unary_operator, assembly_type, operand)
+//     | Binary(binary_operator, assembly_type, operand, operand)
+//     | Cmp(assembly_type, operand, operand)
+//     | Idiv(assembly_type, operand)
+//     | Cdq(assembly_type)
 //     | Jmp(identifier)
 //     | JmpCC(cond_code, identifier)
 //     | SetCC(cond_code, operand)
 //     | Label(identifier)
-//     | AllocateStack(int)
-//     | DeallocateStack(int)
 //     | Push(operand)
 //     | Call(identifier)
 //     | Ret
 #[derive(Debug, Clone)]
 pub enum Instruction {
-    Mov(Operand, Operand),
-    Unary(UnaryOperator, Operand),
-    Binary(BinaryOperator, Operand, Operand),
-    Cmp(Operand, Operand),
-    Idiv(Operand),
-    Cdq,
+    Mov(AssemblyType, Operand, Operand),
+    Movsx(Operand, Operand),
+    Unary(UnaryOperator, AssemblyType, Operand),
+    Binary(BinaryOperator, AssemblyType, Operand, Operand),
+    Cmp(AssemblyType, Operand, Operand),
+    Idiv(AssemblyType, Operand),
+    Cdq(AssemblyType),
     Jmp(String),
     JmpCC(CondCode, String),
     SetCC(CondCode, Operand),
     Label(String),
-    AllocateStack(usize),
-    DeallocateStack(usize),
     Push(Operand),
     Call(String),
     Ret,
@@ -68,7 +75,7 @@ pub enum BinaryOperator {
 // operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int) | Data(identifier)
 #[derive(Debug, Clone)]
 pub enum Operand {
-    Imm(i32),
+    Imm(isize),
     Reg(Reg),
     Pseudo(String),
     Stack(isize),
@@ -92,7 +99,7 @@ pub enum CondCode {
     LE,
 }
 
-// reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11
+// reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11 | SP
 #[derive(Debug, Clone)]
 pub enum Reg {
     AX,
@@ -104,14 +111,15 @@ pub enum Reg {
     R9,
     R10,
     R11,
+    SP,
 }
 
 // ASM codegen wrapper
 pub fn codegen_program(program: &tacky::Program, symbol_table: &SymbolTable) -> Program {
-    let asm_program = tacky_to_asm::tacky_program_to_asm(program);
-    let asm_program =
-        register_allocation::resolve_pseudo_registers_program(&asm_program, symbol_table);
-    let asm_program = instruction_fixup::instruction_fixup_program(&asm_program);
+    let asm_program = tacky_to_asm::tacky_program_to_asm(program, symbol_table);
+    // let asm_program =
+    //     register_allocation::resolve_pseudo_registers_program(&asm_program, symbol_table);
+    // let asm_program = instruction_fixup::instruction_fixup_program(&asm_program);
 
     asm_program
 }

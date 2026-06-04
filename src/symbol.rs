@@ -93,4 +93,8 @@ impl SymbolTable {
         };
         self.map.insert(name.clone(), info);
     }
+
+    pub fn identifier_type(&self, name: &String) -> Option<&Type> {
+        self.map.get(name).map(|info| &info.ty)
+    }
 }
