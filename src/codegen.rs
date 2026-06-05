@@ -1,21 +1,15 @@
 use crate::{
-    symbol::{StaticInit, SymbolTable},
+    symbol::{AssemblyType, BackendSymbolTable, StaticInit, SymbolTable},
     tacky,
 };
 
-mod instruction_fixup;
-mod register_allocation;
+// mod instruction_fixup;
+// mod register_allocation;
 mod tacky_to_asm;
 
 // program = Program(top_level*)
 #[derive(Debug)]
 pub struct Program(pub Vec<TopLevel>);
-
-// assembly_type = Longword | Quadword
-pub enum AssemblyType {
-    Longword,
-    Quadword,
-}
 
 // top_level = Function(identifier name, bool global, instruction* instructions)
 //     | StaticVariable(identifier name, bool global, int alignment, static_init init)
@@ -117,6 +111,11 @@ pub enum Reg {
 // ASM codegen wrapper
 pub fn codegen_program(program: &tacky::Program, symbol_table: &SymbolTable) -> Program {
     let asm_program = tacky_to_asm::tacky_program_to_asm(program, symbol_table);
+
+    let backend_symbol_table = BackendSymbolTable::new(symbol_table.clone());
+
+    println!("Backend Symbol Table: {:#?}", backend_symbol_table);
+
     // let asm_program =
     //     register_allocation::resolve_pseudo_registers_program(&asm_program, symbol_table);
     // let asm_program = instruction_fixup::instruction_fixup_program(&asm_program);

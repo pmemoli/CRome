@@ -78,33 +78,41 @@ pub fn tacky_instruction_to_asm(
 ) -> Vec<Instruction> {
     match tacky_function {
         tacky::Instruction::Return(val) => {
+            let val_asm_type = tacky_value_type(val, symbol_table);
             let src_asm_op = tacky_val_to_asm_operand(val);
             let dst_asm_op = Operand::Reg(Reg::AX);
-            vec![Instruction::Mov(src_asm_op, dst_asm_op), Instruction::Ret]
+            vec![
+                Instruction::Mov(val_asm_type, src_asm_op, dst_asm_op),
+                Instruction::Ret,
+            ]
         }
 
         tacky::Instruction::Unary(unop, src, dst) => {
+            let src_asm_type = tacky_value_type(src, symbol_table);
+            let dst_asm_type = tacky_value_type(dst, symbol_table);
             let src_asm_op = tacky_val_to_asm_operand(src);
             let dst_asm_op = tacky_val_to_asm_operand(dst);
 
             match unop {
                 tacky::UnaryOperator::Not => {
                     vec![
-                        Instruction::Cmp(Operand::Imm(0), src_asm_op),
-                        Instruction::Mov(Operand::Imm(0), dst_asm_op.clone()),
+                        Instruction::Cmp(src_asm_type, Operand::Imm(0), src_asm_op),
+                        Instruction::Mov(dst_asm_type, Operand::Imm(0), dst_asm_op.clone()),
                         Instruction::SetCC(CondCode::E, dst_asm_op),
                     ]
                 }
                 _ => {
                     let unop_asm_op = tacky_unop_to_unop_asm(unop);
                     vec![
-                        Instruction::Mov(src_asm_op, dst_asm_op.clone()),
-                        Instruction::Unary(unop_asm_op, dst_asm_op),
+                        Instruction::Mov(src_asm_type.clone(), src_asm_op, dst_asm_op.clone()),
+                        Instruction::Unary(unop_asm_op, src_asm_type, dst_asm_op),
                     ]
                 }
             }
         }
         tacky::Instruction::Binary(op, src_a, src_b, dst) => {
+            let src_a_asm_type = tacky_value_type(src_a, symbol_table);
+            let dst_asm_type = tacky_value_type(dst, symbol_table);
             let src_a_asm_op = tacky_val_to_asm_operand(src_a);
             let src_b_asm_op = tacky_val_to_asm_operand(src_b);
             let dst_asm_op = tacky_val_to_asm_operand(dst);
@@ -112,18 +120,26 @@ pub fn tacky_instruction_to_asm(
             match op {
                 tacky::BinaryOperator::Divide => {
                     vec![
-                        Instruction::Mov(src_a_asm_op, Operand::Reg(Reg::AX)),
-                        Instruction::Cdq,
-                        Instruction::Idiv(src_b_asm_op),
-                        Instruction::Mov(Operand::Reg(Reg::AX), dst_asm_op),
+                        Instruction::Mov(
+                            src_a_asm_type.clone(),
+                            src_a_asm_op,
+                            Operand::Reg(Reg::AX),
+                        ),
+                        Instruction::Cdq(src_a_asm_type.clone()),
+                        Instruction::Idiv(src_a_asm_type.clone(), src_b_asm_op),
+                        Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::AX), dst_asm_op),
                     ]
                 }
                 tacky::BinaryOperator::Remainder => {
                     vec![
-                        Instruction::Mov(src_a_asm_op, Operand::Reg(Reg::AX)),
-                        Instruction::Cdq,
-                        Instruction::Idiv(src_b_asm_op),
-                        Instruction::Mov(Operand::Reg(Reg::DX), dst_asm_op),
+                        Instruction::Mov(
+                            src_a_asm_type.clone(),
+                            src_a_asm_op,
+                            Operand::Reg(Reg::AX),
+                        ),
+                        Instruction::Cdq(src_a_asm_type.clone()),
+                        Instruction::Idiv(src_a_asm_type.clone(), src_b_asm_op),
+                        Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::DX), dst_asm_op),
                     ]
                 }
 
@@ -135,8 +151,8 @@ pub fn tacky_instruction_to_asm(
                 | tacky::BinaryOperator::GreaterOrEqual => {
                     let cond_code = tacky_binop_to_cond_asm(op);
                     vec![
-                        Instruction::Cmp(src_b_asm_op, src_a_asm_op),
-                        Instruction::Mov(Operand::Imm(0), dst_asm_op.clone()),
+                        Instruction::Cmp(src_a_asm_type, src_b_asm_op, src_a_asm_op),
+                        Instruction::Mov(dst_asm_type, Operand::Imm(0), dst_asm_op.clone()),
                         Instruction::SetCC(cond_code, dst_asm_op),
                     ]
                 }
@@ -144,85 +160,116 @@ pub fn tacky_instruction_to_asm(
                 _ => {
                     let binop_asm_op = tacky_binop_to_binop_asm(op);
                     vec![
-                        Instruction::Mov(src_a_asm_op, dst_asm_op.clone()),
-                        Instruction::Binary(binop_asm_op, src_b_asm_op, dst_asm_op),
+                        Instruction::Mov(src_a_asm_type.clone(), src_a_asm_op, dst_asm_op.clone()),
+                        Instruction::Binary(binop_asm_op, src_a_asm_type, src_b_asm_op, dst_asm_op),
                     ]
                 }
             }
         }
         tacky::Instruction::Copy(src, dst) => {
+            let src_asm_type = tacky_value_type(src, symbol_table);
             let src_asm_op = tacky_val_to_asm_operand(src);
             let dst_asm_op = tacky_val_to_asm_operand(dst);
-            vec![Instruction::Mov(src_asm_op, dst_asm_op)]
+            vec![Instruction::Mov(src_asm_type, src_asm_op, dst_asm_op)]
         }
         tacky::Instruction::Jump(label) => vec![Instruction::Jmp(label.to_string())],
         tacky::Instruction::JumpIfZero(cond, label) => {
+            let cond_asm_type = tacky_value_type(cond, symbol_table);
             let cond_asm_op = tacky_val_to_asm_operand(cond);
             vec![
-                Instruction::Cmp(Operand::Imm(0), cond_asm_op),
+                Instruction::Cmp(cond_asm_type, Operand::Imm(0), cond_asm_op),
                 Instruction::JmpCC(CondCode::E, label.to_string()),
             ]
         }
         tacky::Instruction::JumpIfNotZero(cond, label) => {
+            let cond_asm_type = tacky_value_type(cond, symbol_table);
             let cond_asm_op = tacky_val_to_asm_operand(cond);
             vec![
-                Instruction::Cmp(Operand::Imm(0), cond_asm_op),
+                Instruction::Cmp(cond_asm_type, Operand::Imm(0), cond_asm_op),
                 Instruction::JmpCC(CondCode::NE, label.to_string()),
             ]
         }
         tacky::Instruction::Label(label) => vec![Instruction::Label(label.to_string())],
-        tacky::Instruction::FunCall(identifier, args, dst) => {
-            let mut instructions = Vec::new();
-
-            let reg_order = vec![Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
-
-            // Add padding to ensure stack is 16-byte aligned before call instruction
-            let stack_args = (args.len() as isize - reg_order.len() as isize).max(0) as usize;
-            let mut stack_padding = 0;
-            if stack_args % 2 == 1 {
-                stack_padding = 8;
-                instructions.push(Instruction::Binary(
-                    BinaryOperator::Sub,
-                    AssemblyType::Quadword,
-                    Operand::Imm(stack_padding),
-                    Operand::Reg(Reg::SP),
-                ))
-            }
-
-            // Pass args according to ABI
-            for i in 0..args.len() {
-                if i < reg_order.len() {
-                    let asm_arg_type = tacky_value_type(&args[i], symbol_table);
-                    let asm_arg = tacky_val_to_asm_operand(&args[i]);
-                    let dst = Operand::Reg(reg_order[i].clone());
-                    instructions.push(Instruction::Mov(asm_arg_type, asm_arg, dst));
-                } else {
-                    // We push stack arguments in reverse order
-                    let stack_arg_number = i - reg_order.len();
-                    let asm_arg =
-                        tacky_val_to_asm_operand(&args[args.len() - 1 - stack_arg_number]);
-
-                    instructions.push(Instruction::Push(asm_arg));
-                }
-            }
-
-            // Call function
-            instructions.push(Instruction::Call(identifier.to_string()));
-
-            // Cleanup arguments
-            let stack_arguments = (args.len() as isize - reg_order.len() as isize).max(0) as usize;
-            let bytes_to_cleanup = stack_arguments * 8 + stack_padding as usize;
-            if bytes_to_cleanup > 0 {
-                instructions.push(Instruction::DeallocateStack(bytes_to_cleanup));
-            }
-
-            // Retrieve return value
-            let dst_asm_op = tacky_val_to_asm_operand(dst);
-            instructions.push(Instruction::Mov(Operand::Reg(Reg::AX), dst_asm_op));
-
-            instructions
+        tacky::Instruction::FunCall(..) => tacky_fun_call_to_asm(tacky_function, symbol_table),
+        tacky::Instruction::SignExtend(src, dst) => {
+            let asm_src = tacky_val_to_asm_operand(src);
+            let asm_dst = tacky_val_to_asm_operand(dst);
+            vec![Instruction::Movsx(asm_src, asm_dst)]
+        }
+        tacky::Instruction::Truncate(src, dst) => {
+            let asm_src = tacky_val_to_asm_operand(src);
+            let asm_dst = tacky_val_to_asm_operand(dst);
+            vec![Instruction::Mov(AssemblyType::Longword, asm_src, asm_dst)]
         }
     }
+}
+
+pub fn tacky_fun_call_to_asm(
+    tacky_fun_call: &tacky::Instruction,
+    symbol_table: &SymbolTable,
+) -> Vec<Instruction> {
+    let tacky::Instruction::FunCall(identifier, args, dst) = tacky_fun_call else {
+        panic!("Expected a function call instruction");
+    };
+
+    let mut instructions = Vec::new();
+
+    let reg_order = vec![Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
+
+    // Add padding to ensure stack is 16-byte aligned before call instruction
+    let stack_args = (args.len() as isize - reg_order.len() as isize).max(0) as usize;
+    let mut stack_padding = 0;
+    if stack_args % 2 == 1 {
+        stack_padding = 8;
+        instructions.push(Instruction::Binary(
+            BinaryOperator::Sub,
+            AssemblyType::Quadword,
+            Operand::Imm(stack_padding),
+            Operand::Reg(Reg::SP),
+        ))
+    }
+
+    // Pass args according to ABI
+    for i in 0..args.len() {
+        if i < reg_order.len() {
+            let asm_arg_type = tacky_value_type(&args[i], symbol_table);
+            let asm_arg = tacky_val_to_asm_operand(&args[i]);
+            let dst = Operand::Reg(reg_order[i].clone());
+            instructions.push(Instruction::Mov(asm_arg_type, asm_arg, dst));
+        } else {
+            // We push stack arguments in reverse order
+            let stack_arg_number = i - reg_order.len();
+            let asm_arg = tacky_val_to_asm_operand(&args[args.len() - 1 - stack_arg_number]);
+
+            instructions.push(Instruction::Push(asm_arg));
+        }
+    }
+
+    // Call function
+    instructions.push(Instruction::Call(identifier.to_string()));
+
+    // Cleanup arguments
+    let stack_arguments = (args.len() as isize - reg_order.len() as isize).max(0) as usize;
+    let bytes_to_cleanup = stack_arguments * 8 + stack_padding as usize;
+    if bytes_to_cleanup > 0 {
+        instructions.push(Instruction::Binary(
+            BinaryOperator::Add,
+            AssemblyType::Quadword,
+            Operand::Imm(bytes_to_cleanup as isize),
+            Operand::Reg(Reg::SP),
+        ))
+    }
+
+    // Retrieve return value
+    let dst_asm_op = tacky_val_to_asm_operand(dst);
+    let dst_asm_type = tacky_value_type(dst, symbol_table);
+    instructions.push(Instruction::Mov(
+        dst_asm_type,
+        Operand::Reg(Reg::AX),
+        dst_asm_op,
+    ));
+
+    instructions
 }
 
 pub fn tacky_val_to_asm_operand(tacky_function: &tacky::Val) -> Operand {
