@@ -62,10 +62,7 @@ pub fn tacky_top_level_to_asm(
             TopLevel::Function(identifier, *tacky_global, asm_instructions)
         }
         tacky::TopLevel::StaticVariable(identifier, global, ty, init) => {
-            let alignment = match symbol_type_to_asm_type(ty) {
-                AssemblyType::Longword => 4,
-                AssemblyType::Quadword => 8,
-            };
+            let alignment = symbol_type_to_asm_type(ty).alignment();
 
             TopLevel::StaticVariable(identifier.to_string(), *global, alignment, init.clone())
         }

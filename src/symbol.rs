@@ -113,6 +113,22 @@ pub enum AssemblyType {
     Quadword,
 }
 
+impl AssemblyType {
+    pub fn alignment(&self) -> usize {
+        match self {
+            Self::Longword => 4,
+            Self::Quadword => 8,
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        match self {
+            Self::Longword => 4,
+            Self::Quadword => 8,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum BackendSymbolMetadata {
     ObjEntry { ty: AssemblyType, is_static: bool },

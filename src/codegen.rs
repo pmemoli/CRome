@@ -4,7 +4,7 @@ use crate::{
 };
 
 // mod instruction_fixup;
-// mod register_allocation;
+mod register_allocation;
 mod tacky_to_asm;
 
 // program = Program(top_level*)
@@ -16,7 +16,7 @@ pub struct Program(pub Vec<TopLevel>);
 #[derive(Debug, Clone)]
 pub enum TopLevel {
     Function(String, bool, Vec<Instruction>),
-    StaticVariable(String, bool, isize, StaticInit),
+    StaticVariable(String, bool, usize, StaticInit),
 }
 
 // instruction = Mov(assembly_type, operand src, operand dst)
@@ -114,10 +114,9 @@ pub fn codegen_program(program: &tacky::Program, symbol_table: &SymbolTable) -> 
 
     let backend_symbol_table = BackendSymbolTable::new(symbol_table.clone());
 
-    println!("Backend Symbol Table: {:#?}", backend_symbol_table);
+    let asm_program =
+        register_allocation::resolve_pseudo_registers_program(&asm_program, &backend_symbol_table);
 
-    // let asm_program =
-    //     register_allocation::resolve_pseudo_registers_program(&asm_program, symbol_table);
     // let asm_program = instruction_fixup::instruction_fixup_program(&asm_program);
 
     asm_program
