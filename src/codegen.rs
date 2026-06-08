@@ -3,7 +3,7 @@ use crate::{
     tacky,
 };
 
-// mod instruction_fixup;
+mod instruction_fixup;
 mod register_allocation;
 mod tacky_to_asm;
 
@@ -80,6 +80,15 @@ impl Operand {
     pub fn is_memory_operand(&self) -> bool {
         matches!(self, Operand::Stack(_) | Operand::Data(_))
     }
+
+    pub fn is_large_imm_operand(&self) -> bool {
+        if let Operand::Imm(i) = self {
+            let converted: Result<i32, _> = (*i).try_into();
+            converted.is_ok()
+        } else {
+            false
+        }
+    }
 }
 
 // cond_code = E | NE | G | GE | L | LE
@@ -117,7 +126,7 @@ pub fn codegen_program(program: &tacky::Program, symbol_table: &SymbolTable) -> 
     let asm_program =
         register_allocation::resolve_pseudo_registers_program(&asm_program, &backend_symbol_table);
 
-    // let asm_program = instruction_fixup::instruction_fixup_program(&asm_program);
+    let asm_program = instruction_fixup::instruction_fixup_program(&asm_program);
 
     asm_program
 }

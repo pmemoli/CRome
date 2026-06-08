@@ -229,6 +229,8 @@ reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11 | SP
 
 1. Fix up instructions so that src and dst operands are not both memory addresses
 
+It would be a good idea to list all instruction fixups here... xdxd
+
 ## Code Emission
 
 ### External Linkage
