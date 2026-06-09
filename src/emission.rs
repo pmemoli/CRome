@@ -1,5 +1,9 @@
-use crate::{codegen, symbol::SymbolMetadata, symbol::SymbolTable};
+use crate::{
+    codegen,
+    symbol::{AssemblyType, StaticInit, SymbolMetadata, SymbolTable},
+};
 
+#[derive(Debug, Clone, Copy)]
 pub enum OperandSize {
     Byte,
     Word,
@@ -42,23 +46,47 @@ pub fn emission_top_level(asm_top_level: &codegen::TopLevel, symbol_table: &Symb
 
             function
         }
-        codegen::TopLevel::StaticVariable(name, global, init) => {
-            let mut static_var = String::new();
-            if *global {
-                static_var.push_str(&format!("    .globl {}\n", name));
-            }
-
-            if *init == 0 {
-                static_var.push_str("    .bss\n");
-                static_var.push_str("    .align 4\n");
-                static_var.push_str(&format!("{}:\n", name));
-                static_var.push_str("    .zero 4\n");
+        codegen::TopLevel::StaticVariable(name, global, alignment, init) => {
+            let global_directive = if *global {
+                format!("    .globl {}\n", name)
             } else {
-                static_var.push_str("    .data\n");
-                static_var.push_str("    .align 4\n");
-                static_var.push_str(&format!("{}:\n", name));
-                static_var.push_str(&format!("    .long {}\n", init));
-            }
+                String::new()
+            };
+            let alignment_directive = format!("    .align {}\n", alignment);
+            let init_directive = match init {
+                StaticInit::IntInit(i) => {
+                    if *i == 0 {
+                        format!("    .zero 4\n")
+                    } else {
+                        format!("    .long {}\n", i)
+                    }
+                }
+                StaticInit::LongInit(i) => {
+                    if *i == 0 {
+                        format!("    .zero 8\n")
+                    } else {
+                        format!("    .quad {}\n", i)
+                    }
+                }
+            };
+
+            let init_value: usize = match init {
+                StaticInit::IntInit(i) => *i as usize,
+                StaticInit::LongInit(i) => *i as usize,
+            };
+
+            let section_directive = if init_value == 0 {
+                "    .bss\n"
+            } else {
+                "    .data\n"
+            };
+
+            let mut static_var = String::new();
+            static_var.push_str(&global_directive);
+            static_var.push_str(section_directive);
+            static_var.push_str(&alignment_directive);
+            static_var.push_str(&format!("{}:\n", name));
+            static_var.push_str(&init_directive);
 
             static_var
         }
@@ -70,34 +98,50 @@ pub fn emission_instruction(
     symbol_table: &SymbolTable,
 ) -> String {
     match asm_instructions {
-        codegen::Instruction::Mov(src, dst) => {
+        codegen::Instruction::Mov(ty, src, dst) => {
+            let suffix = emission_type_suffix(ty);
+            let size = operand_size_from_type(ty);
+            let src_str = emission_operand(src, size);
+            let dst_str = emission_operand(dst, size);
+            format!("mov{} {},{}", suffix, src_str, dst_str)
+        }
+        codegen::Instruction::Movsx(src, dst) => {
             let src_str = emission_operand(src, OperandSize::Dword);
-            let dst_str = emission_operand(dst, OperandSize::Dword);
-            format!("movl {},{}", src_str, dst_str)
+            let dst_str = emission_operand(dst, OperandSize::Qword);
+            format!("movslq {},{}", src_str, dst_str)
         }
         codegen::Instruction::Ret => {
             format!("movq %rbp, %rsp\n    popq %rbp\n    ret")
         }
-        codegen::Instruction::Unary(unop, op) => {
+        codegen::Instruction::Unary(unop, ty, op) => {
             let unop_str = emission_unary_operator(unop);
-            let op_str = emission_operand(op, OperandSize::Dword);
-            format!("{} {}", unop_str, op_str)
+            let suffix = emission_type_suffix(ty);
+            let op_str = emission_operand(op, operand_size_from_type(ty));
+            format!("{}{} {}", unop_str, suffix, op_str)
         }
-        codegen::Instruction::Binary(binop, src, dst) => {
+        codegen::Instruction::Binary(binop, ty, src, dst) => {
             let binop_str = emission_binary_operator(binop);
-            let src_str = emission_operand(src, OperandSize::Dword);
-            let dst_str = emission_operand(dst, OperandSize::Dword);
-            format!("{} {},{}", binop_str, src_str, dst_str)
+            let suffix = emission_type_suffix(ty);
+            let size = operand_size_from_type(ty);
+            let src_str = emission_operand(src, size);
+            let dst_str = emission_operand(dst, size);
+            format!("{}{} {},{}", binop_str, suffix, src_str, dst_str)
         }
-        codegen::Instruction::Cmp(src, dst) => {
-            let src_str = emission_operand(src, OperandSize::Dword);
-            let dst_str = emission_operand(dst, OperandSize::Dword);
-            format!("cmpl {},{}", src_str, dst_str)
+        codegen::Instruction::Cmp(ty, src, dst) => {
+            let suffix = emission_type_suffix(ty);
+            let size = operand_size_from_type(ty);
+            let src_str = emission_operand(src, size);
+            let dst_str = emission_operand(dst, size);
+            format!("cmp{} {},{}", suffix, src_str, dst_str)
         }
-        codegen::Instruction::Cdq => format!("cdq"),
-        codegen::Instruction::Idiv(op) => {
-            let op_str = emission_operand(op, OperandSize::Dword);
-            format!("idivl {}", op_str)
+        codegen::Instruction::Cdq(ty) => match ty {
+            AssemblyType::Longword => format!("cdq"),
+            AssemblyType::Quadword => format!("cqo"),
+        },
+        codegen::Instruction::Idiv(ty, op) => {
+            let suffix = emission_type_suffix(ty);
+            let op_str = emission_operand(op, operand_size_from_type(ty));
+            format!("idiv{} {}", suffix, op_str)
         }
         codegen::Instruction::Jmp(label) => format!("jmp .L{}", label),
         codegen::Instruction::JmpCC(cond_code, label) => {
@@ -110,8 +154,6 @@ pub fn emission_instruction(
             format!("set{} {}", cond_code_str, op_str)
         }
         codegen::Instruction::Label(label) => format!(".L{}:", label),
-        codegen::Instruction::AllocateStack(i) => format!("subq ${}, %rsp", i),
-        codegen::Instruction::DeallocateStack(i) => format!("addq ${}, %rsp", i),
         codegen::Instruction::Push(op) => {
             let op_str = emission_operand(op, OperandSize::Qword);
             format!("pushq {}", op_str)
@@ -128,6 +170,20 @@ pub fn emission_instruction(
                 panic!("Undefined symbol: {}", label);
             }
         }
+    }
+}
+
+pub fn emission_type_suffix(asm_type: &AssemblyType) -> String {
+    match asm_type {
+        AssemblyType::Longword => String::from("l"),
+        AssemblyType::Quadword => String::from("q"),
+    }
+}
+
+pub fn operand_size_from_type(asm_type: &AssemblyType) -> OperandSize {
+    match asm_type {
+        AssemblyType::Longword => OperandSize::Dword,
+        AssemblyType::Quadword => OperandSize::Qword,
     }
 }
 
@@ -169,6 +225,11 @@ pub fn emission_register(asm_reg: &codegen::Reg, size: OperandSize) -> String {
         (codegen::Reg::R11, OperandSize::Word) => String::from("%r11w"),
         (codegen::Reg::R11, OperandSize::Dword) => String::from("%r11d"),
         (codegen::Reg::R11, OperandSize::Qword) => String::from("%r11"),
+        (codegen::Reg::SP, OperandSize::Qword) => String::from("%rsp"),
+        _ => panic!(
+            "Invalid register and operand size combination: {:?} with size {:?}",
+            asm_reg, size
+        ),
     }
 }
 
@@ -184,16 +245,16 @@ pub fn emission_operand(asm_operand: &codegen::Operand, size: OperandSize) -> St
 
 pub fn emission_unary_operator(asm_unop: &codegen::UnaryOperator) -> String {
     match asm_unop {
-        codegen::UnaryOperator::Not => String::from("notl"),
-        codegen::UnaryOperator::Neg => String::from("negl"),
+        codegen::UnaryOperator::Not => String::from("not"),
+        codegen::UnaryOperator::Neg => String::from("neg"),
     }
 }
 
 pub fn emission_binary_operator(asm_unop: &codegen::BinaryOperator) -> String {
     match asm_unop {
-        codegen::BinaryOperator::Add => String::from("addl"),
-        codegen::BinaryOperator::Sub => String::from("subl"),
-        codegen::BinaryOperator::Mult => String::from("imull"),
+        codegen::BinaryOperator::Add => String::from("add"),
+        codegen::BinaryOperator::Sub => String::from("sub"),
+        codegen::BinaryOperator::Mult => String::from("imul"),
     }
 }
 

@@ -17,7 +17,7 @@ Currently in chapter 11 / 20, finished part 1.
 
 TODO:
 
-- Chapter 11 codegen
+- Chapter 11 emission
 
 Backlog:
 

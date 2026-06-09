@@ -84,7 +84,7 @@ impl Operand {
     pub fn is_large_imm_operand(&self) -> bool {
         if let Operand::Imm(i) = self {
             let converted: Result<i32, _> = (*i).try_into();
-            converted.is_ok()
+            !converted.is_ok()
         } else {
             false
         }
