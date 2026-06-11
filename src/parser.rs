@@ -148,11 +148,13 @@ pub enum BinaryOperator {
     GreaterThanOrEqual,
 }
 
-// const = ConstInt(int) | ConstLong(int)
+// const = ConstInt(int) | ConstLong(int) | ConstUInt(int) | ConstULong(int)
 #[derive(Debug, Clone)]
 pub enum Const {
     ConstInt(i32),
+    ConstUInt(u32),
     ConstLong(i64),
+    ConstULong(u64),
 }
 
 // utils
@@ -201,7 +203,18 @@ impl Token {
     }
 
     pub fn is_type_specifier(&self) -> bool {
-        matches!(self, Token::IntKeyword | Token::LongKeyword)
+        matches!(
+            self,
+            Token::IntKeyword | Token::LongKeyword | Token::UnsignedKeyword | Token::SignedKeyword
+        )
+    }
+
+    pub fn is_storage_class_specifier(&self) -> bool {
+        matches!(self, Token::Static | Token::Extern)
+    }
+
+    pub fn is_specifier(&self) -> bool {
+        self.is_type_specifier() || self.is_storage_class_specifier()
     }
 
     pub fn precedence(&self) -> i32 {
@@ -296,67 +309,17 @@ pub fn parse_declaration(tokens: &mut VecDeque<Token>) -> Declaration {
     }
 }
 
-// <type-specifier> ::= "int" | "long"
-fn parse_types(tokens: &mut VecDeque<Token>) -> Vec<Type> {
-    let mut types = Vec::new();
-    while matches!(peek(tokens), Token::IntKeyword | Token::LongKeyword) {
-        match peek(tokens) {
-            Token::IntKeyword => {
-                types.push(Type::Int);
-                take_token(tokens);
-            }
-            Token::LongKeyword => {
-                types.push(Type::Long);
-                take_token(tokens);
-            }
-            _ => {}
-        }
-    }
-    types
-}
-
-// Here it should count the type amount on each { <type-specifier> }+
-pub fn parse_type_list(types: Vec<Type>) -> Type {
-    let mut type_counter: HashMap<Type, usize> = HashMap::new();
-    for ty in &types {
-        if let Some(count) = type_counter.get_mut(ty) {
-            *count += 1;
-        } else {
-            type_counter.insert(ty.clone(), 1);
-        }
-    }
-
-    if types.is_empty() {
-        panic!("Syntax Error: Expected a type specifier but found none");
-    } else if types.len() == 1 {
-        types[0].clone()
-    } else if type_counter.values().any(|&count| count > 1) {
-        panic!("Syntax Error: Duplicate type specifiers are not allowed");
-    } else if types.contains(&Type::Int) && types.contains(&Type::Long) {
-        Type::Long
-    } else {
-        panic!("Syntax Error: Invalid type combination");
-    }
-}
-
-// <type-specifier> ::= "int" | "long"
-// parses { <type-specifier> }+ into a single type
-pub fn parse_type(tokens: &mut VecDeque<Token>) -> Type {
-    let types = parse_types(tokens);
-    parse_type_list(types)
-}
-
 // <param-list> ::= "void" | { <type-specifier> }+ <identifier> { "," { <type-specifier> }+ <identifier> }
 pub fn parse_param_list(tokens: &mut VecDeque<Token>) -> Vec<(Type, String)> {
     let mut param_list = Vec::new();
     match peek(tokens) {
-        Token::IntKeyword | Token::LongKeyword => {
-            let ty = parse_type(tokens);
+        t if t.is_type_specifier() => {
+            let (ty, _) = parse_type_and_storage_class(tokens);
             param_list.push((ty, parse_identifier(tokens)));
 
             while matches!(peek(tokens), Token::Comma) {
                 take_token(tokens);
-                let ty = parse_type(tokens);
+                let (ty, _) = parse_type_and_storage_class(tokens);
                 param_list.push((ty, parse_identifier(tokens)));
             }
         }
@@ -372,43 +335,82 @@ pub fn parse_param_list(tokens: &mut VecDeque<Token>) -> Vec<(Type, String)> {
 
 // <specifier> ::= <type-specifier> | "static" | "extern"
 // parses { <specifier> }+ into a type and storage class tuple
+// can be heavily optimized but whatever, lists are small
 pub fn parse_type_and_storage_class(tokens: &mut VecDeque<Token>) -> (Type, Option<StorageClass>) {
-    let mut types: Vec<Type> = Vec::new();
-    let mut storage_classes: Vec<StorageClass> = Vec::new();
+    let mut storage_specifiers: Vec<Token> = Vec::new();
+    let mut type_specifiers: Vec<Token> = Vec::new();
 
     loop {
         let next_token = peek(tokens);
         match next_token {
-            Token::Identifier(_) => break,
-            Token::IntKeyword => {
-                types.push(Type::Int);
+            t if t.is_type_specifier() => {
+                type_specifiers.push(t.clone());
                 take_token(tokens);
             }
-            Token::LongKeyword => {
-                types.push(Type::Long);
+            t if t.is_storage_class_specifier() => {
+                storage_specifiers.push(t.clone());
                 take_token(tokens);
             }
-            Token::Static => {
-                storage_classes.push(StorageClass::Static);
-                take_token(tokens);
-            }
-            Token::Extern => {
-                storage_classes.push(StorageClass::Extern);
-                take_token(tokens);
-            }
-            _ => panic!("Expected a specifier but found {:?}", next_token),
+            _ => break,
         }
     }
 
-    let ty = parse_type_list(types);
-
-    let storage_class = match storage_classes.len() {
-        0 => None,
-        1 => Some(storage_classes[0].clone()),
-        _ => panic!("Syntax Error: Multiple storage classes specified"),
-    };
+    let ty = parse_type_from_specifiers(&mut type_specifiers);
+    let storage_class = parse_storage_class_from_specifiers(&mut storage_specifiers);
 
     (ty, storage_class)
+}
+
+// parses { <specifier> }+ into a single type
+pub fn parse_type_from_specifiers(specifier_tokens: &mut Vec<Token>) -> Type {
+    // Specifier list must be non-empty
+    if specifier_tokens.is_empty() {
+        panic!("Syntax Error: Expected at least one type specifier");
+    }
+
+    // Specifiers can't be repeated
+    let mut seen_specifiers = HashMap::new();
+    for token in specifier_tokens.iter() {
+        if seen_specifiers.contains_key(token) {
+            panic!("Syntax Error: Specifier {:?} is repeated", token);
+        }
+        seen_specifiers.insert(token.clone(), true);
+    }
+
+    // Sign specification must be consistent
+    if specifier_tokens.contains(&Token::UnsignedKeyword)
+        && specifier_tokens.contains(&Token::SignedKeyword)
+    {
+        panic!("Syntax Error: Can't specify both 'signed' and 'unsigned'");
+    }
+
+    // Simple specification rules
+    let unsigned = specifier_tokens.contains(&Token::UnsignedKeyword);
+    let long = specifier_tokens.contains(&Token::LongKeyword);
+
+    if unsigned {
+        if long { Type::ULong } else { Type::UInt }
+    } else {
+        if long { Type::Long } else { Type::Int }
+    }
+}
+
+pub fn parse_storage_class_from_specifiers(
+    specifier_tokens: &mut Vec<Token>,
+) -> Option<StorageClass> {
+    if specifier_tokens.len() > 1 {
+        panic!(
+            "Syntax Error: Multiple specifiers found where only one storage class specifier is allowed"
+        );
+    }
+
+    if specifier_tokens.contains(&Token::Static) {
+        Some(StorageClass::Static)
+    } else if specifier_tokens.contains(&Token::Extern) {
+        Some(StorageClass::Extern)
+    } else {
+        None
+    }
 }
 
 // <block> ::= "{" { <block-item> } "}"
@@ -428,9 +430,7 @@ pub fn parse_block(tokens: &mut VecDeque<Token>) -> Block {
 // <block-item> ::= <statement> | <declaration>
 pub fn parse_block_item(tokens: &mut VecDeque<Token>) -> BlockItem {
     match peek(tokens) {
-        Token::IntKeyword | Token::LongKeyword | Token::Static | Token::Extern => {
-            BlockItem::D(parse_declaration(tokens))
-        }
+        t if t.is_specifier() => BlockItem::D(parse_declaration(tokens)),
         _ => BlockItem::S(parse_statement(tokens)),
     }
 }
@@ -525,7 +525,7 @@ pub fn parse_statement(tokens: &mut VecDeque<Token>) -> Statement {
 // <for-init> ::= <declaration> | [ <exp> ] ";"
 pub fn parse_for_init(tokens: &mut VecDeque<Token>) -> ForInit {
     match peek(tokens) {
-        Token::IntKeyword | Token::LongKeyword | Token::Static | Token::Extern => {
+        t if t.is_specifier() => {
             let decl = parse_declaration(tokens);
             match decl {
                 Declaration::VarDecl(var_decl) => ForInit::InitDecl(var_decl),
@@ -588,7 +588,10 @@ pub fn parse_optional_expr(
 //     | <identifier> "(" [ <argument-list> ] ")"
 pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
     match peek(tokens) {
-        Token::Constant(_) | Token::LongConstant(_) => {
+        Token::Constant(_)
+        | Token::LongConstant(_)
+        | Token::UConstant(_)
+        | Token::ULongConstant(_) => {
             let cons = parse_constant(tokens);
             let expr = Expr::Constant(cons, None);
             expr
@@ -601,7 +604,7 @@ pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
         Token::OpenParenthesis => match peek_n(tokens, 1).is_type_specifier() {
             true => {
                 take_token(tokens);
-                let ty = parse_type(tokens);
+                let (ty, _) = parse_type_and_storage_class(tokens);
                 expect(Token::CloseParenthesis, tokens);
                 let factor = parse_factor(tokens);
                 Expr::Cast(ty, Box::new(factor), None)
@@ -639,8 +642,18 @@ pub fn parse_constant(tokens: &mut VecDeque<Token>) -> Const {
             take_token(tokens);
             cons
         }
+        Token::UConstant(i) => {
+            let cons = Const::ConstUInt(*i);
+            take_token(tokens);
+            cons
+        }
         Token::LongConstant(i) => {
             let cons = Const::ConstLong(*i);
+            take_token(tokens);
+            cons
+        }
+        Token::ULongConstant(i) => {
+            let cons = Const::ConstULong(*i);
             take_token(tokens);
             cons
         }
@@ -714,13 +727,3 @@ pub fn parse_identifier(tokens: &mut VecDeque<Token>) -> String {
 
     s.to_string()
 }
-
-// <int> ::= ? A constant token ? (a separate function is currently not needed...)
-// pub fn parse_int(tokens: &mut VecDeque<Token>) -> i32 {
-//     let actual = tokens.pop_front().unwrap();
-//     let Token::Constant(s) = actual else {
-//         panic!("Syntax Error: Can't parse {:?} as an integer", actual);
-//     };
-//
-//     s
-// }

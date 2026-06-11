@@ -1,11 +1,15 @@
 use regex::Regex;
 use std::collections::VecDeque;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Hash)]
 pub enum Token {
     Identifier(String),
     Constant(i32),
+    UConstant(u32),
     LongConstant(i64),
+    ULongConstant(u64),
+    SignedKeyword,
+    UnsignedKeyword,
     LongKeyword,
     IntKeyword,
     VoidKeyword,
@@ -53,6 +57,7 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
         (Regex::new(r"^[a-zA-Z_]\w*\b").unwrap(), |s| {
             Token::Identifier(s.to_string())
         }),
+        // Signed constants
         (Regex::new(r"^[0-9]+\b").unwrap(), |s| {
             match s.parse::<i32>() {
                 Ok(num) => Token::Constant(num),
@@ -61,6 +66,20 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
         }),
         (Regex::new(r"^[0-9]+[lL]\b").unwrap(), |s| {
             Token::LongConstant(s[..s.len() - 1].parse::<i64>().unwrap())
+        }),
+        // Unsigned constants
+        (Regex::new(r"^[0-9]+[uU]\b").unwrap(), |s| {
+            match s[..s.len() - 1].parse::<u32>() {
+                Ok(num) => Token::UConstant(num),
+                Err(_) => Token::ULongConstant(s[..s.len() - 1].parse::<u64>().unwrap()),
+            }
+        }),
+        (Regex::new(r"^[0-9]+([lL][uU]|[uU][lL])\b").unwrap(), |s| {
+            Token::ULongConstant(s[..s.len() - 2].parse::<u64>().unwrap())
+        }),
+        (Regex::new(r"^signed\b").unwrap(), |_| Token::SignedKeyword),
+        (Regex::new(r"^unsigned\b").unwrap(), |_| {
+            Token::UnsignedKeyword
         }),
         (Regex::new(r"^long\b").unwrap(), |_| Token::LongKeyword),
         (Regex::new(r"^int\b").unwrap(), |_| Token::IntKeyword),
