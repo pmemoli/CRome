@@ -236,9 +236,26 @@ pub fn tacky_fun_call_to_asm(
         } else {
             // We push stack arguments in reverse order
             let stack_arg_number = i - reg_order.len();
-            let asm_arg = tacky_val_to_asm_operand(&args[args.len() - 1 - stack_arg_number]);
+            let tacky_arg = &args[args.len() - 1 - stack_arg_number];
 
-            instructions.push(Instruction::Push(asm_arg));
+            let asm_arg_type = tacky_value_type(tacky_arg, symbol_table);
+            let asm_arg = tacky_val_to_asm_operand(tacky_arg);
+
+            let pushable = match asm_arg {
+                Operand::Imm(_) | Operand::Reg(_) => true,
+                Operand::Pseudo(_) | Operand::Stack(_) | Operand::Data(_) => false,
+            };
+
+            if pushable {
+                instructions.push(Instruction::Push(asm_arg));
+            } else {
+                instructions.push(Instruction::Mov(
+                    asm_arg_type,
+                    asm_arg,
+                    Operand::Reg(Reg::R10),
+                ));
+                instructions.push(Instruction::Push(Operand::Reg(Reg::R10)));
+            }
         }
     }
 

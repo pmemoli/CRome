@@ -99,7 +99,16 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
             ]
         }
 
+        // We only consider movslq (src is always a longword)
         Instruction::Movsx(src @ Operand::Imm(_), dst) if dst.is_memory_operand() => {
+            vec![
+                Instruction::Mov(AssemblyType::Longword, src.clone(), Operand::Reg(Reg::R10)),
+                Instruction::Movsx(Operand::Reg(Reg::R10), Operand::Reg(Reg::R11)),
+                Instruction::Mov(AssemblyType::Quadword, Operand::Reg(Reg::R11), dst.clone()),
+            ]
+        }
+
+        Instruction::Movsx(src, dst) if src.is_memory_operand() && dst.is_memory_operand() => {
             vec![
                 Instruction::Mov(AssemblyType::Longword, src.clone(), Operand::Reg(Reg::R10)),
                 Instruction::Movsx(Operand::Reg(Reg::R10), Operand::Reg(Reg::R11)),
@@ -114,6 +123,15 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
 // Quadword versions of add, sub, imul, cmp and push can't handle imm values outside of ints (need fixup)
 pub fn instruction_fixup_large_imm(instruction: &Instruction) -> Vec<Instruction> {
     match instruction {
+        Instruction::Mov(AssemblyType::Quadword, src @ Operand::Imm(imm), dst)
+            if src.is_large_imm_operand() =>
+        {
+            vec![
+                Instruction::Mov(AssemblyType::Quadword, src.clone(), Operand::Reg(Reg::R10)),
+                Instruction::Mov(AssemblyType::Quadword, Operand::Reg(Reg::R10), dst.clone()),
+            ]
+        }
+
         Instruction::Binary(
             binop @ BinaryOperator::Add
             | binop @ BinaryOperator::Sub
@@ -133,12 +151,12 @@ pub fn instruction_fixup_large_imm(instruction: &Instruction) -> Vec<Instruction
             ]
         }
 
-        Instruction::Cmp(AssemblyType::Quadword, src, dst @ Operand::Imm(imm))
-            if dst.is_large_imm_operand() =>
+        Instruction::Cmp(AssemblyType::Quadword, src @ Operand::Imm(imm), dst)
+            if src.is_large_imm_operand() =>
         {
             vec![
-                Instruction::Mov(AssemblyType::Quadword, dst.clone(), Operand::Reg(Reg::R10)),
-                Instruction::Cmp(AssemblyType::Quadword, src.clone(), Operand::Reg(Reg::R10)),
+                Instruction::Mov(AssemblyType::Quadword, src.clone(), Operand::Reg(Reg::R10)),
+                Instruction::Cmp(AssemblyType::Quadword, Operand::Reg(Reg::R10), dst.clone()),
             ]
         }
 
