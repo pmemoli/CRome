@@ -35,7 +35,9 @@ pub enum InitialValue {
 #[derive(Debug, Clone)]
 pub enum StaticInit {
     IntInit(i32),
+    UIntInit(u32),
     LongInit(i64),
+    ULongInit(u64),
 }
 
 #[derive(PartialEq, Debug, Clone, Eq, Hash)]
@@ -45,6 +47,24 @@ pub enum Type {
     Long,
     ULong,
     FunType(Vec<Type>, Box<Type>), // (param_types, return_type)
+}
+
+impl Type {
+    pub fn byte_size(&self) -> usize {
+        match self {
+            Type::Int | Type::UInt => 4,
+            Type::Long | Type::ULong => 8,
+            Type::FunType(_, _) => panic!("Functions do not have a byte size"),
+        }
+    }
+
+    pub fn signed(&self) -> bool {
+        match self {
+            Type::Int | Type::Long => true,
+            Type::UInt | Type::ULong => false,
+            Type::FunType(_, _) => panic!("Functions do not have signedness"),
+        }
+    }
 }
 
 impl SymbolTable {

@@ -13,11 +13,13 @@ use crate::symbol::{InitialValue, StaticInit, SymbolMetadata, Type};
 // Variables
 
 // 1. Check that an initialized file scope value is only init with a constant expression
-// 2. Check that declarations have consistent types
+// 2. Check that declarations have consistent types (equal or coercible)
 
-// Types
+// Types (annotate, validate and coerce)
 
-// Annotate the AST with the type of each expression, and insert corresponding casts where necessary.
+// 1. Annotate the AST with the type of each expression.
+// 2. Cast sub expressions in binary expressions to the common type if possible
+// 3. Cast the expression to the declaration type if possible
 
 // Symbol Table
 
@@ -124,32 +126,37 @@ pub fn typecheck_block_scope_variable_declaration(
     )
 }
 
+// Converts constant expression directly without casting
 pub fn static_convert_constant_expr(expr: &parser::Expr, ty: &Type) -> parser::Expr {
     let parser::Expr::Constant(cons, _) = expr else {
         panic!("Expected constant expression for static variable initialization")
     };
 
-    let (new_cons, new_ty) = match cons {
-        parser::Const::ConstInt(i) => match ty {
-            Type::Int => (parser::Const::ConstInt(*i), Type::Int),
-            Type::Long => (parser::Const::ConstLong(*i as i64), Type::Long),
-            _ => panic!("Unsupported type for static variable initialization"),
-        },
-
-        parser::Const::ConstLong(i) => match ty {
-            Type::Int => (parser::Const::ConstInt(*i as i32), Type::Int),
-            Type::Long => (parser::Const::ConstLong(*i), Type::Long),
-            _ => panic!("Unsupported type for static variable initialization"),
-        },
+    let val: i128 = match cons {
+        parser::Const::ConstInt(i) => *i as i128,
+        parser::Const::ConstLong(i) => *i as i128,
+        parser::Const::ConstUInt(u) => *u as i128,
+        parser::Const::ConstULong(u) => *u as i128,
     };
 
-    parser::Expr::Constant(new_cons, Some(new_ty))
+    // Rust preserves C standards for integer conversions
+    let new_cons = match ty {
+        Type::Int => parser::Const::ConstInt(val as i32),
+        Type::Long => parser::Const::ConstLong(val as i64),
+        Type::UInt => parser::Const::ConstUInt(val as u32),
+        Type::ULong => parser::Const::ConstULong(val as u64),
+        _ => panic!("Unsupported type for static variable initialization"),
+    };
+
+    parser::Expr::Constant(new_cons, Some(ty.clone()))
 }
 
 pub fn constant_to_static_init(cons: &parser::Const) -> StaticInit {
     match cons {
         parser::Const::ConstInt(i) => StaticInit::IntInit(*i),
         parser::Const::ConstLong(i) => StaticInit::LongInit(*i),
+        parser::Const::ConstUInt(u) => StaticInit::UIntInit(*u),
+        parser::Const::ConstULong(u) => StaticInit::ULongInit(*u),
     }
 }
 
@@ -525,7 +532,9 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
         }
         parser::Expr::Constant(cons, _) => match cons {
             parser::Const::ConstInt(_) => set_type(expr, Type::Int),
+            parser::Const::ConstUInt(_) => set_type(expr, Type::UInt),
             parser::Const::ConstLong(_) => set_type(expr, Type::Long),
+            parser::Const::ConstULong(_) => set_type(expr, Type::ULong),
         },
         parser::Expr::Cast(ty, inner, _) => {
             let typed_inner = typecheck_expr(inner.as_ref(), symbol_table);
@@ -557,10 +566,15 @@ pub fn get_common_type(left: &parser::Expr, right: &parser::Expr) -> Type {
     let left_ty = get_type(left);
     let right_ty = get_type(right);
 
+    // Implements C standards for common type coercion
     if left_ty == right_ty {
         left_ty
+    } else if left_ty.byte_size() == right_ty.byte_size() {
+        if left_ty.signed() { right_ty } else { left_ty }
+    } else if left_ty.byte_size() > right_ty.byte_size() {
+        left_ty
     } else {
-        Type::Long
+        right_ty
     }
 }
 

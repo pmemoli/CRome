@@ -6,4 +6,4 @@ run-debug:
 
 test:
 	cargo build
-	./tests/test_compiler ./target/debug/crab --chapter 12 --stage parse
+	./tests/test_compiler ./target/debug/crab --chapter 12 --stage tacky

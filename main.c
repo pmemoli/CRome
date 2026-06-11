@@ -1,6 +1,6 @@
 int j = 1;
 
 int main(void) {
-    static unsigned long i = 100ul;
+    unsigned int i = 100l;
     return 0;
 }

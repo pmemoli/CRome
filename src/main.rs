@@ -8,9 +8,9 @@ use tempfile::{Builder, NamedTempFile};
 // mod emission;
 mod lexer;
 mod parser;
-// mod semantic;
+mod semantic;
 mod symbol;
-// mod tacky;
+mod tacky;
 
 #[derive(Parser)]
 #[command(name = "crab")]
@@ -69,24 +69,24 @@ fn main() -> Result<()> {
 
     let ast = parser::parse_program(&mut tokens);
 
-    println!("{:#?}", ast);
-
     if args.parse {
         return Ok(());
     }
 
-    // let resolved_ast = semantic::semantic_analysis(&ast, &mut symbol_table);
-    //
-    // if args.validate {
-    //     return Ok(());
-    // }
-    //
-    // let tacky_ast = tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
-    //
-    // if args.tacky {
-    //     return Ok(());
-    // }
-    //
+    let resolved_ast = semantic::semantic_analysis(&ast, &mut symbol_table);
+
+    if args.validate {
+        return Ok(());
+    }
+
+    let tacky_ast = tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
+
+    println!("{:#?}", tacky_ast);
+
+    if args.tacky {
+        return Ok(());
+    }
+
     // let asm_ast = codegen::codegen_program(&tacky_ast, &symbol_table);
     //
     // if args.codegen {

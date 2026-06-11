@@ -17,6 +17,7 @@ pub enum TopLevel {
 // instruction = Return(val)
 //     | SignExtend(val src, val dst)
 //     | Truncate(val src, val dst)
+//     | ZeroExtend(val src, val dst)
 //     | Unary(unary_operator, val src, val dst)
 //     | Binary(binary_operator, val src1, val src2, val dst)
 //     | Copy(val src, val dst)
@@ -29,6 +30,7 @@ pub enum TopLevel {
 pub enum Instruction {
     Return(Val),
     SignExtend(Val, Val),
+    ZeroExtend(Val, Val),
     Truncate(Val, Val),
     Unary(UnaryOperator, Val, Val),
     Binary(BinaryOperator, Val, Val, Val),
@@ -117,7 +119,9 @@ pub fn convert_symbols_to_tacky(symbol_table: &mut SymbolTable) -> Vec<TopLevel>
                 Some(InitialValue::Tentative) => {
                     let static_init = match ty {
                         Type::Int => StaticInit::IntInit(0),
+                        Type::UInt => StaticInit::UIntInit(0),
                         Type::Long => StaticInit::LongInit(0),
+                        Type::ULong => StaticInit::ULongInit(0),
                         _ => panic!("Unsupported type for tentative static variable."),
                     };
 
@@ -527,15 +531,15 @@ pub fn ast_expression_to_tacky(
             let dst_name = generate_unique_variable(symbol_table, e_type);
             let dst = Val::Var(dst_name);
 
-            match (inner_type, t) {
-                (Type::Int, Type::Long) => {
-                    instructions.push(Instruction::SignExtend(result, dst.clone()))
-                }
-                (Type::Long, Type::Int) => {
-                    instructions.push(Instruction::Truncate(result, dst.clone()))
-                }
-                _ => panic!("Unsupported cast from {:?} to {:?}", get_type(inner), t),
-            };
+            if t.byte_size() == inner_type.byte_size() {
+                instructions.push(Instruction::Copy(result, dst.clone()));
+            } else if t.byte_size() < inner_type.byte_size() {
+                instructions.push(Instruction::Truncate(result, dst.clone()))
+            } else if inner_type.signed() {
+                instructions.push(Instruction::SignExtend(result, dst.clone()))
+            } else {
+                instructions.push(Instruction::ZeroExtend(result, dst.clone()))
+            }
 
             dst
         }

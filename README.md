@@ -10,11 +10,12 @@ Currently in chapter 12 / 20, finished part 1.
 
 TODO:
 
-- Chapter 12 semantic analysis
+- Chapter 12 codegen
 
 Backlog:
 
 - Proper error reporting system, currently just panics with a message and a backtrace.
+- Cuter error messages, its very inconsistent right now.
 
 ## Lexer
 
@@ -160,6 +161,7 @@ top_level = Function(identifier, bool global, identifier* params, instruction* b
 instruction = Return(val)
     | SignExtend(val src, val dst)
     | Truncate(val src, val dst)
+    | ZeroExtend(val src, val dst)
     | Unary(unary_operator, val src, val dst)
     | Binary(binary_operator, val src1, val src2, val dst)
     | Copy(val src, val dst)
