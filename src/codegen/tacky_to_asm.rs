@@ -114,30 +114,65 @@ pub fn tacky_instruction_to_asm(
             let src_b_asm_op = tacky_val_to_asm_operand(src_b);
             let dst_asm_op = tacky_val_to_asm_operand(dst);
 
+            let signed_operands = tacky_value_type_is_signed(src_a, symbol_table);
             match op {
                 tacky::BinaryOperator::Divide => {
-                    vec![
-                        Instruction::Mov(
-                            src_a_asm_type.clone(),
-                            src_a_asm_op,
-                            Operand::Reg(Reg::AX),
-                        ),
-                        Instruction::Cdq(src_a_asm_type.clone()),
-                        Instruction::Idiv(src_a_asm_type.clone(), src_b_asm_op),
-                        Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::AX), dst_asm_op),
-                    ]
+                    if signed_operands {
+                        vec![
+                            Instruction::Mov(
+                                src_a_asm_type.clone(),
+                                src_a_asm_op,
+                                Operand::Reg(Reg::AX),
+                            ),
+                            Instruction::Cdq(src_a_asm_type.clone()),
+                            Instruction::Idiv(src_a_asm_type.clone(), src_b_asm_op),
+                            Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::AX), dst_asm_op),
+                        ]
+                    } else {
+                        vec![
+                            Instruction::Mov(
+                                src_a_asm_type.clone(),
+                                src_a_asm_op,
+                                Operand::Reg(Reg::AX),
+                            ),
+                            Instruction::Mov(
+                                src_a_asm_type.clone(),
+                                Operand::Imm(0),
+                                Operand::Reg(Reg::DX),
+                            ),
+                            Instruction::Div(src_a_asm_type.clone(), src_b_asm_op),
+                            Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::AX), dst_asm_op),
+                        ]
+                    }
                 }
                 tacky::BinaryOperator::Remainder => {
-                    vec![
-                        Instruction::Mov(
-                            src_a_asm_type.clone(),
-                            src_a_asm_op,
-                            Operand::Reg(Reg::AX),
-                        ),
-                        Instruction::Cdq(src_a_asm_type.clone()),
-                        Instruction::Idiv(src_a_asm_type.clone(), src_b_asm_op),
-                        Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::DX), dst_asm_op),
-                    ]
+                    if signed_operands {
+                        vec![
+                            Instruction::Mov(
+                                src_a_asm_type.clone(),
+                                src_a_asm_op,
+                                Operand::Reg(Reg::AX),
+                            ),
+                            Instruction::Cdq(src_a_asm_type.clone()),
+                            Instruction::Idiv(src_a_asm_type.clone(), src_b_asm_op),
+                            Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::DX), dst_asm_op),
+                        ]
+                    } else {
+                        vec![
+                            Instruction::Mov(
+                                src_a_asm_type.clone(),
+                                src_a_asm_op,
+                                Operand::Reg(Reg::AX),
+                            ),
+                            Instruction::Mov(
+                                src_a_asm_type.clone(),
+                                Operand::Imm(0),
+                                Operand::Reg(Reg::DX),
+                            ),
+                            Instruction::Div(src_a_asm_type.clone(), src_b_asm_op),
+                            Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::DX), dst_asm_op),
+                        ]
+                    }
                 }
 
                 tacky::BinaryOperator::Equal
@@ -146,7 +181,12 @@ pub fn tacky_instruction_to_asm(
                 | tacky::BinaryOperator::LessOrEqual
                 | tacky::BinaryOperator::GreaterThan
                 | tacky::BinaryOperator::GreaterOrEqual => {
-                    let cond_code = tacky_binop_to_cond_asm(op);
+                    let cond_code = if signed_operands {
+                        tacky_binop_to_cond_asm(op)
+                    } else {
+                        tacky_unsigned_binop_to_cond_asm(op)
+                    };
+
                     vec![
                         Instruction::Cmp(src_a_asm_type, src_b_asm_op, src_a_asm_op),
                         Instruction::Mov(dst_asm_type, Operand::Imm(0), dst_asm_op.clone()),
@@ -197,6 +237,11 @@ pub fn tacky_instruction_to_asm(
             let asm_src = tacky_val_to_asm_operand(src);
             let asm_dst = tacky_val_to_asm_operand(dst);
             vec![Instruction::Mov(AssemblyType::Longword, asm_src, asm_dst)]
+        }
+        tacky::Instruction::ZeroExtend(src, dst) => {
+            let asm_src = tacky_val_to_asm_operand(src);
+            let asm_dst = tacky_val_to_asm_operand(dst);
+            vec![Instruction::MovZeroExtend(asm_src, asm_dst)]
         }
     }
 }
@@ -269,7 +314,7 @@ pub fn tacky_fun_call_to_asm(
         instructions.push(Instruction::Binary(
             BinaryOperator::Add,
             AssemblyType::Quadword,
-            Operand::Imm(bytes_to_cleanup as isize),
+            Operand::Imm(bytes_to_cleanup as i128),
             Operand::Reg(Reg::SP),
         ))
     }
@@ -289,8 +334,10 @@ pub fn tacky_fun_call_to_asm(
 pub fn tacky_val_to_asm_operand(tacky_function: &tacky::Val) -> Operand {
     match tacky_function {
         tacky::Val::Constant(c) => match c {
-            Const::ConstInt(i) => Operand::Imm(*i as isize),
-            Const::ConstLong(i) => Operand::Imm(*i as isize),
+            Const::ConstInt(i) => Operand::Imm(*i as i128),
+            Const::ConstUInt(u) => Operand::Imm(*u as i128),
+            Const::ConstLong(i) => Operand::Imm(*i as i128),
+            Const::ConstULong(u) => Operand::Imm(*u as i128),
         },
         tacky::Val::Var(s) => Operand::Pseudo(s.to_string()),
     }
@@ -327,6 +374,18 @@ pub fn tacky_binop_to_cond_asm(tacky_binop: &tacky::BinaryOperator) -> CondCode 
     }
 }
 
+pub fn tacky_unsigned_binop_to_cond_asm(tacky_binop: &tacky::BinaryOperator) -> CondCode {
+    match tacky_binop {
+        tacky::BinaryOperator::Equal => CondCode::E,
+        tacky::BinaryOperator::NotEqual => CondCode::NE,
+        tacky::BinaryOperator::LessThan => CondCode::B,
+        tacky::BinaryOperator::LessOrEqual => CondCode::BE,
+        tacky::BinaryOperator::GreaterThan => CondCode::A,
+        tacky::BinaryOperator::GreaterOrEqual => CondCode::AE,
+        _ => panic!("Can't convert non-comparison binary operator to condition code in codegen"),
+    }
+}
+
 pub fn tacky_value_type(tacky_val: &tacky::Val, symbol_table: &SymbolTable) -> AssemblyType {
     match tacky_val {
         tacky::Val::Var(var_name) => {
@@ -338,15 +397,32 @@ pub fn tacky_value_type(tacky_val: &tacky::Val, symbol_table: &SymbolTable) -> A
         }
         tacky::Val::Constant(c) => match c {
             Const::ConstInt(_) => AssemblyType::Longword,
+            Const::ConstUInt(_) => AssemblyType::Longword,
             Const::ConstLong(_) => AssemblyType::Quadword,
+            Const::ConstULong(_) => AssemblyType::Quadword,
         },
+    }
+}
+
+pub fn tacky_value_type_is_signed(tacky_val: &tacky::Val, symbol_table: &SymbolTable) -> bool {
+    match tacky_val {
+        tacky::Val::Var(var_name) => {
+            let var_info = symbol_table
+                .get(var_name)
+                .expect(&format!("Variable {} not found in symbol table", var_name));
+
+            var_info.ty.signed()
+        }
+        tacky::Val::Constant(c) => matches!(c, Const::ConstInt(_) | Const::ConstLong(_)),
     }
 }
 
 pub fn symbol_type_to_asm_type(tacky_type: &Type) -> AssemblyType {
     match tacky_type {
         Type::Int => AssemblyType::Longword,
+        Type::UInt => AssemblyType::Longword,
         Type::Long => AssemblyType::Quadword,
+        Type::ULong => AssemblyType::Quadword,
         _ => panic!("Unsupported type for assembly codegen"),
     }
 }

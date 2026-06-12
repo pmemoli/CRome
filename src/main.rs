@@ -4,8 +4,8 @@ use std::fs;
 use std::process::Command;
 use tempfile::{Builder, NamedTempFile};
 
-// mod codegen;
-// mod emission;
+mod codegen;
+mod emission;
 mod lexer;
 mod parser;
 mod semantic;
@@ -81,48 +81,48 @@ fn main() -> Result<()> {
 
     let tacky_ast = tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
 
-    println!("{:#?}", tacky_ast);
-
     if args.tacky {
         return Ok(());
     }
 
-    // let asm_ast = codegen::codegen_program(&tacky_ast, &symbol_table);
-    //
-    // if args.codegen {
-    //     return Ok(());
-    // }
-    //
-    // let asm_str = emission::emission_program(&asm_ast, &symbol_table);
-    //
-    // // Runs assembler and linker
-    // let assembly_file = Builder::new().suffix(".s").tempfile()?;
-    // let assembly_file_path = assembly_file.path();
-    //
-    // fs::write(assembly_file_path, asm_str)?;
-    //
-    // let stem = source_file.strip_suffix(".c").unwrap_or(source_file);
-    // let output_file = if args.c {
-    //     format!("{}.o", stem)
-    // } else {
-    //     stem.to_string()
-    // };
-    //
-    // let mut gcc_command = Command::new("gcc");
-    //
-    // if args.c {
-    //     gcc_command.arg("-c"); // Do not link, only generate object file
-    // }
-    //
-    // let status = gcc_command
-    //     .arg(assembly_file_path)
-    //     .arg("-o")
-    //     .arg(&output_file)
-    //     .status()?;
-    //
-    // if !status.success() {
-    //     bail!("Object generation and linking failed at runtime.");
-    // }
+    let asm_ast = codegen::codegen_program(&tacky_ast, &symbol_table);
+
+    if args.codegen {
+        return Ok(());
+    }
+
+    let asm_str = emission::emission_program(&asm_ast, &symbol_table);
+
+    println!("{}", asm_str);
+
+    // Runs assembler and linker
+    let assembly_file = Builder::new().suffix(".s").tempfile()?;
+    let assembly_file_path = assembly_file.path();
+
+    fs::write(assembly_file_path, asm_str)?;
+
+    let stem = source_file.strip_suffix(".c").unwrap_or(source_file);
+    let output_file = if args.c {
+        format!("{}.o", stem)
+    } else {
+        stem.to_string()
+    };
+
+    let mut gcc_command = Command::new("gcc");
+
+    if args.c {
+        gcc_command.arg("-c"); // Do not link, only generate object file
+    }
+
+    let status = gcc_command
+        .arg(assembly_file_path)
+        .arg("-o")
+        .arg(&output_file)
+        .status()?;
+
+    if !status.success() {
+        bail!("Object generation and linking failed at runtime.");
+    }
 
     Ok(())
 }

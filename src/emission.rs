@@ -46,6 +46,7 @@ pub fn emission_top_level(asm_top_level: &codegen::TopLevel, symbol_table: &Symb
 
             function
         }
+
         codegen::TopLevel::StaticVariable(name, global, alignment, init) => {
             let global_directive = if *global {
                 format!("    .globl {}\n", name)
@@ -61,7 +62,21 @@ pub fn emission_top_level(asm_top_level: &codegen::TopLevel, symbol_table: &Symb
                         format!("    .long {}\n", i)
                     }
                 }
+                StaticInit::UIntInit(i) => {
+                    if *i == 0 {
+                        format!("    .zero 4\n")
+                    } else {
+                        format!("    .long {}\n", i)
+                    }
+                }
                 StaticInit::LongInit(i) => {
+                    if *i == 0 {
+                        format!("    .zero 8\n")
+                    } else {
+                        format!("    .quad {}\n", i)
+                    }
+                }
+                StaticInit::ULongInit(i) => {
                     if *i == 0 {
                         format!("    .zero 8\n")
                     } else {
@@ -70,9 +85,11 @@ pub fn emission_top_level(asm_top_level: &codegen::TopLevel, symbol_table: &Symb
                 }
             };
 
-            let init_value: usize = match init {
-                StaticInit::IntInit(i) => *i as usize,
-                StaticInit::LongInit(i) => *i as usize,
+            let init_value: i128 = match init {
+                StaticInit::IntInit(i) => *i as i128,
+                StaticInit::UIntInit(i) => *i as i128,
+                StaticInit::LongInit(i) => *i as i128,
+                StaticInit::ULongInit(i) => *i as i128,
             };
 
             let section_directive = if init_value == 0 {
@@ -143,6 +160,11 @@ pub fn emission_instruction(
             let op_str = emission_operand(op, operand_size_from_type(ty));
             format!("idiv{} {}", suffix, op_str)
         }
+        codegen::Instruction::Div(ty, op) => {
+            let suffix = emission_type_suffix(ty);
+            let op_str = emission_operand(op, operand_size_from_type(ty));
+            format!("div{} {}", suffix, op_str)
+        }
         codegen::Instruction::Jmp(label) => format!("jmp .L{}", label),
         codegen::Instruction::JmpCC(cond_code, label) => {
             let cond_code_str = emission_cond_code(cond_code);
@@ -170,6 +192,7 @@ pub fn emission_instruction(
                 panic!("Undefined symbol: {}", label);
             }
         }
+        _ => panic!("Unexpected instruction type in emission"),
     }
 }
 
@@ -266,5 +289,9 @@ pub fn emission_cond_code(asm_cond_code: &codegen::CondCode) -> String {
         codegen::CondCode::LE => String::from("le"),
         codegen::CondCode::G => String::from("g"),
         codegen::CondCode::GE => String::from("ge"),
+        codegen::CondCode::A => String::from("a"),
+        codegen::CondCode::AE => String::from("ae"),
+        codegen::CondCode::B => String::from("b"),
+        codegen::CondCode::BE => String::from("be"),
     }
 }

@@ -48,6 +48,13 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
             ]
         }
 
+        Instruction::Div(ty, op @ Operand::Imm(_)) => {
+            vec![
+                Instruction::Mov(ty.clone(), op.clone(), Operand::Reg(Reg::R10)),
+                Instruction::Div(ty.clone(), Operand::Reg(Reg::R10)),
+            ]
+        }
+
         Instruction::Binary(
             binop @ BinaryOperator::Add | binop @ BinaryOperator::Sub,
             ty,
@@ -112,6 +119,21 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
             vec![
                 Instruction::Mov(AssemblyType::Longword, src.clone(), Operand::Reg(Reg::R10)),
                 Instruction::Movsx(Operand::Reg(Reg::R10), Operand::Reg(Reg::R11)),
+                Instruction::Mov(AssemblyType::Quadword, Operand::Reg(Reg::R11), dst.clone()),
+            ]
+        }
+
+        Instruction::MovZeroExtend(src, dst @ Operand::Reg(_)) => {
+            vec![Instruction::Mov(
+                AssemblyType::Longword,
+                src.clone(),
+                dst.clone(),
+            )]
+        }
+
+        Instruction::MovZeroExtend(src, dst) if dst.is_memory_operand() => {
+            vec![
+                Instruction::Mov(AssemblyType::Longword, src.clone(), Operand::Reg(Reg::R11)),
                 Instruction::Mov(AssemblyType::Quadword, Operand::Reg(Reg::R11), dst.clone()),
             ]
         }

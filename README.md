@@ -6,11 +6,11 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS).
 
 After implementing the book's subset of C, the language will be extended with more optimizations and features as they are required for RomeOS.
 
-Currently in chapter 12 / 20, finished part 1.
+Currently in chapter 13 / 20, finished part 1.
 
 TODO:
 
-- Chapter 12 codegen
+- Chapter 13
 
 Backlog:
 
@@ -184,10 +184,12 @@ top_level = Function(identifier, bool global, identifier* params, instruction* b
     | StaticVariable(identifier, bool global, type t, static_init init)
 instruction = Mov(assembly_type, operand src, operand dst)
     | Movsx(operand src, operand dst)
+    | MovZeroExtend(operand src, operand dst)
     | Unary(unary_operator, assembly_type, operand)
     | Binary(binary_operator, assembly_type, operand, operand)
     | Cmp(assembly_type, operand, operand)
     | Idiv(assembly_type, operand)
+    | Div(assembly_type, operand)
     | Cdq(assembly_type)
     | Jmp(identifier)
     | JmpCC(cond_code, identifier)
@@ -199,7 +201,7 @@ instruction = Mov(assembly_type, operand src, operand dst)
 unary_operator = Neg | Not
 binary_operator = Add | Sub | Mult
 operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int) | Data(identifier)
-cond_code = E | NE | G | GE | L | LE
+cond_code = E | NE | G | GE | L | LE | A | AE | B | BE
 reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11 | SP
 ```
 

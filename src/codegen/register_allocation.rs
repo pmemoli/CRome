@@ -68,7 +68,7 @@ pub fn resolve_top_level(top_level: &TopLevel, symbol_table: &BackendSymbolTable
                 Instruction::Binary(
                     BinaryOperator::Sub,
                     AssemblyType::Quadword,
-                    Operand::Imm(aligned_stack_size as isize),
+                    Operand::Imm(aligned_stack_size as i128),
                     Operand::Reg(Reg::SP),
                 ),
             );
@@ -103,6 +103,10 @@ pub fn resolve_pseudo_registers_instruction(
             let resolved_op = resolve_pseudo_registers_operand(op, symbol_table, local_stack);
             Instruction::Idiv(ty.clone(), resolved_op)
         }
+        Instruction::Div(ty, op) => {
+            let resolved_op = resolve_pseudo_registers_operand(op, symbol_table, local_stack);
+            Instruction::Div(ty.clone(), resolved_op)
+        }
         Instruction::Cmp(ty, op_1, op_2) => {
             let resolved_op_1 = resolve_pseudo_registers_operand(op_1, symbol_table, local_stack);
             let resolved_op_2 = resolve_pseudo_registers_operand(op_2, symbol_table, local_stack);
@@ -120,6 +124,11 @@ pub fn resolve_pseudo_registers_instruction(
             let resolved_op_1 = resolve_pseudo_registers_operand(op_1, symbol_table, local_stack);
             let resolved_op_2 = resolve_pseudo_registers_operand(op_2, symbol_table, local_stack);
             Instruction::Movsx(resolved_op_1, resolved_op_2)
+        }
+        Instruction::MovZeroExtend(op_1, op_2) => {
+            let resolved_op_1 = resolve_pseudo_registers_operand(op_1, symbol_table, local_stack);
+            let resolved_op_2 = resolve_pseudo_registers_operand(op_2, symbol_table, local_stack);
+            Instruction::MovZeroExtend(resolved_op_1, resolved_op_2)
         }
         i => i.clone(),
     }

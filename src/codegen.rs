@@ -21,10 +21,12 @@ pub enum TopLevel {
 
 // instruction = Mov(assembly_type, operand src, operand dst)
 //     | Movsx(operand src, operand dst)
+//     | MovZeroExtend(operand src, operand dst)
 //     | Unary(unary_operator, assembly_type, operand)
 //     | Binary(binary_operator, assembly_type, operand, operand)
 //     | Cmp(assembly_type, operand, operand)
 //     | Idiv(assembly_type, operand)
+//     | Div(assembly_type, operand)
 //     | Cdq(assembly_type)
 //     | Jmp(identifier)
 //     | JmpCC(cond_code, identifier)
@@ -37,10 +39,12 @@ pub enum TopLevel {
 pub enum Instruction {
     Mov(AssemblyType, Operand, Operand),
     Movsx(Operand, Operand),
+    MovZeroExtend(Operand, Operand),
     Unary(UnaryOperator, AssemblyType, Operand),
     Binary(BinaryOperator, AssemblyType, Operand, Operand),
     Cmp(AssemblyType, Operand, Operand),
     Idiv(AssemblyType, Operand),
+    Div(AssemblyType, Operand),
     Cdq(AssemblyType),
     Jmp(String),
     JmpCC(CondCode, String),
@@ -69,7 +73,7 @@ pub enum BinaryOperator {
 // operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int) | Data(identifier)
 #[derive(Debug, Clone)]
 pub enum Operand {
-    Imm(isize),
+    Imm(i128),
     Reg(Reg),
     Pseudo(String),
     Stack(isize),
@@ -91,7 +95,7 @@ impl Operand {
     }
 }
 
-// cond_code = E | NE | G | GE | L | LE
+// cond_code = E | NE | G | GE | L | LE | A | AE | B | BE
 #[derive(Debug, Clone)]
 pub enum CondCode {
     E,
@@ -100,6 +104,10 @@ pub enum CondCode {
     GE,
     L,
     LE,
+    A,
+    AE,
+    B,
+    BE,
 }
 
 // reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11 | SP
@@ -120,12 +128,9 @@ pub enum Reg {
 // ASM codegen wrapper
 pub fn codegen_program(program: &tacky::Program, symbol_table: &SymbolTable) -> Program {
     let asm_program = tacky_to_asm::tacky_program_to_asm(program, symbol_table);
-
     let backend_symbol_table = BackendSymbolTable::new(symbol_table.clone());
-
     let asm_program =
         register_allocation::resolve_pseudo_registers_program(&asm_program, &backend_symbol_table);
-
     let asm_program = instruction_fixup::instruction_fixup_program(&asm_program);
 
     asm_program
