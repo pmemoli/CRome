@@ -10,7 +10,7 @@ Currently in chapter 13 / 20, finished part 1.
 
 TODO:
 
-- Chapter 13
+- Chapter 13 tacky
 
 Backlog:
 
@@ -25,7 +25,7 @@ program = Program(declaration*)
 declaration = FunDecl(function_declaration) | VarDecl(variable_declaration)
 variable_declaration = (identifier name, exp? init, type var_type, storage_class?)
 function_declaration = (identifier name, identifier* params, block? body, type fun_type, storage_class?)
-type = Int | Long | UInt | ULong | FunType(type* params, type ret)
+type = Int | Long | UInt | ULong | Double | FunType(type* params, type ret)
 storage_class = Static | Extern
 block = Block(block_item*)
 block_item = S(statement) | D(declaration)
@@ -52,7 +52,9 @@ unary_operator = Complement | Negate | Not
 binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
     | Equal | NotEqual | LessThan | LessOrEqual
     | GreaterThan | GreaterOrEqual
-const = ConstInt(int) | ConstLong(int) | ConstUInt(int) | ConstULong(int)
+const = ConstInt(int) | ConstLong(int)
+    | ConstUInt(int) | ConstULong(int)
+    | ConstDouble(double)
 ```
 
 Loop related statements are annotated in the semantic analysis pass.
@@ -65,7 +67,7 @@ Loop related statements are annotated in the semantic analysis pass.
 <function-declaration> ::= { <specifier> }+ <identifier> "(" <param-list> ")" ( <block> | ";")
 <param-list> ::= "void"
     | { <type-specifier> }+ <identifier> { "," { <type-specifier> }+ <identifier> }
-<type-specifier> ::= "int" | "long" | "unsigned" | "signed"
+<type-specifier> ::= "int" | "long" | "unsigned" | "signed" | "double"
 <specifier> ::= <type-specifier> | "static" | "extern"
 <block> ::= "{" { <block-item> } "}"
 <block-item> ::= <statement> | <declaration>
@@ -89,12 +91,13 @@ Loop related statements are annotated in the semantic analysis pass.
 <unop> ::= "-" | "~" | "!"
 <binop> ::= "-" | "+" | "*" | "/" | "%" | "&&" | "||"
     | "==" | "!=" | "<" | "<=" | ">" | ">=" | "="
-<const> ::= <int> | <long> | <uint> | <ulong>
+<const> ::= <int> | <long> | <uint> | <ulong> | <double>
 <identifier> ::= ? An identifier token ?
 <int> ::= ? An int token ?
 <long> ::= ? An int or long token ?
 <uint> ::= ? An unsigned int token ?
 <ulong> ::= ? An unsigned int or unsigned long token ?
+<double> ::= ? A floating-point constant token ?
 ```
 
 ## Semantic Analysis
@@ -158,6 +161,7 @@ Check that identifier declarations do not contradict in having or not having lin
 program = Program(top_level*)
 top_level = Function(identifier, bool global, identifier* params, instruction* body)
     | StaticVariable(identifier, bool global, type t, static_init init)
+static_init = IntInit(int) | LongInit(int) | UIntInit(int) | ULongInit(int) | DoubleInit(double)
 instruction = Return(val)
     | SignExtend(val src, val dst)
     | Truncate(val src, val dst)

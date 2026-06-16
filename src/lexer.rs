@@ -1,3 +1,4 @@
+use ordered_float::OrderedFloat;
 use regex::Regex;
 use std::collections::VecDeque;
 
@@ -8,10 +9,12 @@ pub enum Token {
     UConstant(u32),
     LongConstant(i64),
     ULongConstant(u64),
+    DFloatConstant(OrderedFloat<f64>),
     SignedKeyword,
     UnsignedKeyword,
     LongKeyword,
     IntKeyword,
+    DoubleKeyword,
     VoidKeyword,
     ReturnKeyword,
     OpenParenthesis,
@@ -54,34 +57,49 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
     let mut tokens = VecDeque::new();
 
     let rules: Vec<(Regex, fn(&str) -> Token)> = vec![
+        // Literals
         (Regex::new(r"^[a-zA-Z_]\w*\b").unwrap(), |s| {
             Token::Identifier(s.to_string())
         }),
         // Signed constants
-        (Regex::new(r"^[0-9]+\b").unwrap(), |s| {
-            match s.parse::<i32>() {
+        (Regex::new(r"^([0-9]+)[^\w.]").unwrap(), |s| {
+            match s[..s.len() - 1].parse::<i32>() {
                 Ok(num) => Token::Constant(num),
-                Err(_) => Token::LongConstant(s.parse::<i64>().unwrap()),
+                Err(_) => Token::LongConstant(s[..s.len() - 1].parse::<i64>().unwrap()),
             }
         }),
-        (Regex::new(r"^[0-9]+[lL]\b").unwrap(), |s| {
-            Token::LongConstant(s[..s.len() - 1].parse::<i64>().unwrap())
+        (Regex::new(r"^([0-9]+[lL])[^\w.]").unwrap(), |s| {
+            Token::LongConstant(s[..s.len() - 2].parse::<i64>().unwrap())
         }),
         // Unsigned constants
-        (Regex::new(r"^[0-9]+[uU]\b").unwrap(), |s| {
-            match s[..s.len() - 1].parse::<u32>() {
+        (Regex::new(r"^([0-9]+[uU])[^\w.]").unwrap(), |s| {
+            match s[..s.len() - 2].parse::<u32>() {
                 Ok(num) => Token::UConstant(num),
-                Err(_) => Token::ULongConstant(s[..s.len() - 1].parse::<u64>().unwrap()),
+                Err(_) => Token::ULongConstant(s[..s.len() - 2].parse::<u64>().unwrap()),
             }
         }),
-        (Regex::new(r"^[0-9]+([lL][uU]|[uU][lL])\b").unwrap(), |s| {
-            Token::ULongConstant(s[..s.len() - 2].parse::<u64>().unwrap())
-        }),
+        (
+            Regex::new(r"^([0-9]+([lL][uU]|[uU][lL]))[^\w.]").unwrap(),
+            |s| Token::ULongConstant(s[..s.len() - 3].parse::<u64>().unwrap()),
+        ),
+        // Double Floating point constants
+        (
+            Regex::new(
+                r"^(([0-9]*\.[0-9]+|[0-9]+\.?)[Ee][+-]?[0-9]+|[0-9]*\.[0-9]+|[0-9]+\.)[^\w.]",
+            )
+            .unwrap(),
+            |s| match s[..s.len() - 1].parse::<f64>() {
+                Ok(num) => Token::DFloatConstant(OrderedFloat(num)),
+                Err(_) => panic!("Unable to parse float constant to double."),
+            },
+        ),
+        // Keywords
         (Regex::new(r"^signed\b").unwrap(), |_| Token::SignedKeyword),
         (Regex::new(r"^unsigned\b").unwrap(), |_| {
             Token::UnsignedKeyword
         }),
         (Regex::new(r"^long\b").unwrap(), |_| Token::LongKeyword),
+        (Regex::new(r"^double\b").unwrap(), |_| Token::DoubleKeyword),
         (Regex::new(r"^int\b").unwrap(), |_| Token::IntKeyword),
         (Regex::new(r"^void\b").unwrap(), |_| Token::VoidKeyword),
         (Regex::new(r"^return\b").unwrap(), |_| Token::ReturnKeyword),
@@ -144,7 +162,15 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
         // Select the maximum token by lexicographic order (length and enum)
         let max_match = token_matches.iter().max().unwrap();
 
-        i += max_match.0.len();
+        let advance = match &max_match.1 {
+            Token::Constant(_)
+            | Token::LongConstant(_)
+            | Token::UConstant(_)
+            | Token::ULongConstant(_)
+            | Token::DFloatConstant(_) => max_match.0.len() - 1,
+            _ => max_match.0.len(),
+        };
+        i += advance;
 
         tokens.push_back(max_match.1.clone());
     }

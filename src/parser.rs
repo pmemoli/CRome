@@ -1,3 +1,5 @@
+use ordered_float::OrderedFloat;
+
 use crate::lexer::Token;
 use crate::symbol::Type;
 use std::{
@@ -148,13 +150,16 @@ pub enum BinaryOperator {
     GreaterThanOrEqual,
 }
 
-// const = ConstInt(int) | ConstLong(int) | ConstUInt(int) | ConstULong(int)
+// const = ConstInt(int) | ConstLong(int)
+//     | ConstUInt(int) | ConstULong(int)
+//     | ConstDouble(double)
 #[derive(Debug, Clone)]
 pub enum Const {
     ConstInt(i32),
     ConstUInt(u32),
     ConstLong(i64),
     ConstULong(u64),
+    ConstDouble(f64),
 }
 
 // utils
@@ -180,6 +185,7 @@ fn take_token(tokens: &mut VecDeque<Token>) -> Token {
     tokens.pop_front().unwrap()
 }
 
+// Token utilities for pattern matching
 impl Token {
     pub fn is_binop(&self) -> bool {
         matches!(
@@ -202,10 +208,25 @@ impl Token {
         )
     }
 
+    pub fn is_constant_token(&self) -> bool {
+        matches!(
+            self,
+            Token::Constant(_)
+                | Token::LongConstant(_)
+                | Token::UConstant(_)
+                | Token::ULongConstant(_)
+                | Token::DFloatConstant(_)
+        )
+    }
+
     pub fn is_type_specifier(&self) -> bool {
         matches!(
             self,
-            Token::IntKeyword | Token::LongKeyword | Token::UnsignedKeyword | Token::SignedKeyword
+            Token::IntKeyword
+                | Token::LongKeyword
+                | Token::UnsignedKeyword
+                | Token::SignedKeyword
+                | Token::DoubleKeyword
         )
     }
 
@@ -366,6 +387,14 @@ pub fn parse_type_from_specifiers(specifier_tokens: &mut Vec<Token>) -> Type {
     // Specifier list must be non-empty
     if specifier_tokens.is_empty() {
         panic!("Syntax Error: Expected at least one type specifier");
+    }
+
+    // Doubles can't be combined with other types
+    if specifier_tokens == &vec![Token::DoubleKeyword] {
+        return Type::Double;
+    }
+    if specifier_tokens.contains(&Token::DoubleKeyword) {
+        panic!("Syntax Error: Can't combine 'double' with other type specifiers")
     }
 
     // Specifiers can't be repeated
@@ -588,10 +617,7 @@ pub fn parse_optional_expr(
 //     | <identifier> "(" [ <argument-list> ] ")"
 pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
     match peek(tokens) {
-        Token::Constant(_)
-        | Token::LongConstant(_)
-        | Token::UConstant(_)
-        | Token::ULongConstant(_) => {
+        e if e.is_constant_token() => {
             let cons = parse_constant(tokens);
             let expr = Expr::Constant(cons, None);
             expr
@@ -654,6 +680,11 @@ pub fn parse_constant(tokens: &mut VecDeque<Token>) -> Const {
         }
         Token::ULongConstant(i) => {
             let cons = Const::ConstULong(*i);
+            take_token(tokens);
+            cons
+        }
+        Token::DFloatConstant(OrderedFloat(f)) => {
+            let cons = Const::ConstDouble(*f);
             take_token(tokens);
             cons
         }

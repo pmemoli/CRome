@@ -1,6 +1,7 @@
 int j = 1;
 
 int main(void) {
-    unsigned int i = 100l;
+    double i = 100.e+1 + ~1;
+    int j = 2;
     return 0;
 }
