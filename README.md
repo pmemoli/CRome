@@ -10,7 +10,7 @@ Currently in chapter 13 / 20, finished part 1.
 
 TODO:
 
-- Chapter 13 tacky
+- Chapter 13 codegen
 
 Backlog:
 
@@ -166,6 +166,10 @@ instruction = Return(val)
     | SignExtend(val src, val dst)
     | Truncate(val src, val dst)
     | ZeroExtend(val src, val dst)
+    | DoubleToInt(val src, val dst)
+    | DoubleToUInt(val src, val dst)
+    | IntToDouble(val src, val dst)
+    | UIntToDouble(val src, val dst)
     | Unary(unary_operator, val src, val dst)
     | Binary(binary_operator, val src1, val src2, val dst)
     | Copy(val src, val dst)
@@ -183,12 +187,15 @@ binary_operator = Add | Subtract | Multiply | Divide | Remainder | Equal | NotEq
 ## ASM Grammar
 ```
 program = Program(top_level*)
-assembly_type = Longword | Quadword
-top_level = Function(identifier, bool global, identifier* params, instruction* body)
-    | StaticVariable(identifier, bool global, type t, static_init init)
+assembly_type = Longword | Quadword | Double
+top_level = Function(identifier name, bool global, instruction* instructions)
+    | StaticVariable(identifier name, bool global, int alignment, static_init init)
+    | StaticConstant(identifier name, int alignment, static_init init)
 instruction = Mov(assembly_type, operand src, operand dst)
     | Movsx(operand src, operand dst)
     | MovZeroExtend(operand src, operand dst)
+    | Cvttsd2si(assembly_type dst_type, operand src, operand dst)
+    | Cvtsi2sd(assembly_type src_type, operand src, operand dst)
     | Unary(unary_operator, assembly_type, operand)
     | Binary(binary_operator, assembly_type, operand, operand)
     | Cmp(assembly_type, operand, operand)
@@ -202,11 +209,12 @@ instruction = Mov(assembly_type, operand src, operand dst)
     | Push(operand)
     | Call(identifier)
     | Ret
-unary_operator = Neg | Not
-binary_operator = Add | Sub | Mult
+unary_operator = Neg | Not | Shr
+binary_operator = Add | Sub | Mult | DivDouble | And | Or | Xor
 operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int) | Data(identifier)
 cond_code = E | NE | G | GE | L | LE | A | AE | B | BE
 reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11 | SP
+    | XMM0 | XMM1 | XMM2 | XMM3 | XMM4 | XMM5 | XMM6 | XMM7 | XMM14 | XMM15
 ```
 
 . System V 64 bit calling ABI is implemented in this pass:

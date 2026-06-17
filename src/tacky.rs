@@ -18,6 +18,10 @@ pub enum TopLevel {
 //     | SignExtend(val src, val dst)
 //     | Truncate(val src, val dst)
 //     | ZeroExtend(val src, val dst)
+//     | DoubleToInt(val src, val dst)
+//     | DoubleToUInt(val src, val dst)
+//     | IntToDouble(val src, val dst)
+//     | UIntToDouble(val src, val dst)
 //     | Unary(unary_operator, val src, val dst)
 //     | Binary(binary_operator, val src1, val src2, val dst)
 //     | Copy(val src, val dst)
@@ -31,6 +35,10 @@ pub enum Instruction {
     Return(Val),
     SignExtend(Val, Val),
     ZeroExtend(Val, Val),
+    DoubleToInt(Val, Val),
+    DoubleToUInt(Val, Val),
+    IntToDouble(Val, Val),
+    UIntToDouble(Val, Val),
     Truncate(Val, Val),
     Unary(UnaryOperator, Val, Val),
     Binary(BinaryOperator, Val, Val, Val),
@@ -122,7 +130,10 @@ pub fn convert_symbols_to_tacky(symbol_table: &mut SymbolTable) -> Vec<TopLevel>
                         Type::UInt => StaticInit::UIntInit(0),
                         Type::Long => StaticInit::LongInit(0),
                         Type::ULong => StaticInit::ULongInit(0),
-                        _ => panic!("Unsupported type for tentative static variable."),
+                        Type::Double => StaticInit::DoubleInit(0.),
+                        Type::FunType(_, _) => {
+                            panic!("Function type cannot be used for static variable: {}", name)
+                        }
                     };
 
                     tacky_defs.push(TopLevel::StaticVariable(
@@ -531,14 +542,32 @@ pub fn ast_expression_to_tacky(
             let dst_name = generate_unique_variable(symbol_table, e_type);
             let dst = Val::Var(dst_name);
 
-            if t.byte_size() == inner_type.byte_size() {
-                instructions.push(Instruction::Copy(result, dst.clone()));
-            } else if t.byte_size() < inner_type.byte_size() {
-                instructions.push(Instruction::Truncate(result, dst.clone()))
-            } else if inner_type.signed() {
-                instructions.push(Instruction::SignExtend(result, dst.clone()))
-            } else {
-                instructions.push(Instruction::ZeroExtend(result, dst.clone()))
+            match (t, inner_type) {
+                // double (float) conversion
+                (Type::Int, Type::Double) => {
+                    instructions.push(Instruction::DoubleToInt(result.clone(), dst.clone()))
+                }
+                (Type::UInt, Type::Double) => {
+                    instructions.push(Instruction::DoubleToUInt(result.clone(), dst.clone()))
+                }
+                (Type::Double, Type::Int) => {
+                    instructions.push(Instruction::IntToDouble(result.clone(), dst.clone()))
+                }
+                (Type::Double, Type::UInt) => {
+                    instructions.push(Instruction::UIntToDouble(result.clone(), dst.clone()))
+                }
+                // integer conversion
+                _ => {
+                    if t.byte_size() == inner_type.byte_size() {
+                        instructions.push(Instruction::Copy(result, dst.clone()));
+                    } else if t.byte_size() < inner_type.byte_size() {
+                        instructions.push(Instruction::Truncate(result, dst.clone()))
+                    } else if inner_type.signed() {
+                        instructions.push(Instruction::SignExtend(result, dst.clone()))
+                    } else {
+                        instructions.push(Instruction::ZeroExtend(result, dst.clone()))
+                    }
+                }
             }
 
             dst
