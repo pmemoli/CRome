@@ -1,22 +1,38 @@
+use std::collections::HashMap;
+
 use super::*;
 use crate::parser::Const;
-use crate::symbol::Type;
+use crate::symbol::{InitialValue, Type};
 use crate::tacky;
 
 // First pass: Convert Tacky to ASM AST (with temp variables as pseudoregisters)
-pub fn tacky_program_to_asm(tacky_program: &tacky::Program, symbol_table: &SymbolTable) -> Program {
+pub fn tacky_program_to_asm(
+    tacky_program: &tacky::Program,
+    symbol_table: &mut SymbolTable,
+) -> Program {
     let tacky::Program(tacky_top_level) = tacky_program;
 
     let mut asm_top_level = Vec::new();
+    let mut static_constant_names = HashMap::new();
     for tacky_top_object in tacky_top_level {
-        asm_top_level.push(tacky_top_level_to_asm(tacky_top_object, symbol_table));
+        asm_top_level.push(tacky_top_level_to_asm(
+            tacky_top_object,
+            symbol_table,
+            &mut static_constant_names,
+        ));
     }
+
+    for (name, init) in &static_constant_names {
+        asm_top_level.push(TopLevel::StaticConstant(name.to_string(), 8, init.clone()));
+    }
+
     Program(asm_top_level)
 }
 
 pub fn tacky_top_level_to_asm(
     tacky_top_level: &tacky::TopLevel,
-    symbol_table: &SymbolTable,
+    symbol_table: &mut SymbolTable,
+    static_constant_names: &mut HashMap<String, StaticInit>,
 ) -> TopLevel {
     match tacky_top_level {
         tacky::TopLevel::Function(
@@ -53,7 +69,8 @@ pub fn tacky_top_level_to_asm(
             }
 
             for instruction in tacky_instructions {
-                let mut asm_instrs = tacky_instruction_to_asm(instruction, symbol_table);
+                let mut asm_instrs =
+                    tacky_instruction_to_asm(instruction, symbol_table, static_constant_names);
                 asm_instructions.append(&mut asm_instrs);
             }
 
@@ -71,117 +88,161 @@ pub fn tacky_top_level_to_asm(
 
 pub fn tacky_instruction_to_asm(
     tacky_function: &tacky::Instruction,
-    symbol_table: &SymbolTable,
+    symbol_table: &mut SymbolTable,
+    static_constant_names: &mut HashMap<String, StaticInit>,
 ) -> Vec<Instruction> {
     match tacky_function {
         tacky::Instruction::Return(val) => {
-            let val_asm_type = tacky_value_type(val, symbol_table);
-            let src_asm_op = tacky_val_to_asm_operand(val);
-            let dst_asm_op = Operand::Reg(Reg::AX);
-            vec![
-                Instruction::Mov(val_asm_type, src_asm_op, dst_asm_op),
-                Instruction::Ret,
-            ]
+            let val_asm_type = tacky_value_type_asm(val, symbol_table);
+            let ty = tacky_value_type(val, symbol_table);
+
+            let src_asm_op = tacky_val_to_asm_operand(val, symbol_table, static_constant_names);
+
+            match ty {
+                t if ty.is_integer() => {
+                    let dst_asm_op = Operand::Reg(Reg::AX);
+                    vec![
+                        Instruction::Mov(val_asm_type, src_asm_op, dst_asm_op),
+                        Instruction::Ret,
+                    ]
+                }
+                t if ty.is_floating_point() => {
+                    let dst_asm_op = Operand::Reg(Reg::XMM0);
+                    vec![
+                        Instruction::Mov(val_asm_type, src_asm_op, dst_asm_op),
+                        Instruction::Ret,
+                    ]
+                }
+                _ => panic!("Unsupported return type in codegen"),
+            }
         }
 
         tacky::Instruction::Unary(unop, src, dst) => {
-            let src_asm_type = tacky_value_type(src, symbol_table);
-            let dst_asm_type = tacky_value_type(dst, symbol_table);
-            let src_asm_op = tacky_val_to_asm_operand(src);
-            let dst_asm_op = tacky_val_to_asm_operand(dst);
+            let src_asm_type = tacky_value_type_asm(src, symbol_table);
+            let dst_asm_type = tacky_value_type_asm(dst, symbol_table);
+            let src_asm_op = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+            let dst_asm_op = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
 
-            match unop {
-                tacky::UnaryOperator::Not => {
+            let ty = tacky_value_type(src, symbol_table);
+
+            match (unop, ty) {
+                (tacky::UnaryOperator::Not, t) if t.is_integer() => {
                     vec![
                         Instruction::Cmp(src_asm_type, Operand::Imm(0), src_asm_op),
                         Instruction::Mov(dst_asm_type, Operand::Imm(0), dst_asm_op.clone()),
                         Instruction::SetCC(CondCode::E, dst_asm_op),
                     ]
                 }
-                _ => {
-                    let unop_asm_op = tacky_unop_to_unop_asm(unop);
+                (tacky::UnaryOperator::Not, t) if t.is_floating_point() => {
+                    vec![]
+                }
+                (tacky::UnaryOperator::Complement, _) => {
                     vec![
                         Instruction::Mov(src_asm_type.clone(), src_asm_op, dst_asm_op.clone()),
-                        Instruction::Unary(unop_asm_op, src_asm_type, dst_asm_op),
+                        Instruction::Unary(UnaryOperator::Not, src_asm_type, dst_asm_op),
                     ]
                 }
+                (tacky::UnaryOperator::Negate, t) if t.is_integer() => {
+                    vec![
+                        Instruction::Mov(src_asm_type.clone(), src_asm_op, dst_asm_op.clone()),
+                        Instruction::Unary(UnaryOperator::Neg, src_asm_type, dst_asm_op),
+                    ]
+                }
+                (tacky::UnaryOperator::Negate, t) if t.is_floating_point() => {
+                    vec![]
+                }
+                _ => panic!("Unsupported unary operator/type combination in codegen"),
             }
         }
         tacky::Instruction::Binary(op, src_a, src_b, dst) => {
-            let src_a_asm_type = tacky_value_type(src_a, symbol_table);
-            let dst_asm_type = tacky_value_type(dst, symbol_table);
-            let src_a_asm_op = tacky_val_to_asm_operand(src_a);
-            let src_b_asm_op = tacky_val_to_asm_operand(src_b);
-            let dst_asm_op = tacky_val_to_asm_operand(dst);
+            let src_a_asm_op = tacky_val_to_asm_operand(src_a, symbol_table, static_constant_names);
+            let src_b_asm_op = tacky_val_to_asm_operand(src_b, symbol_table, static_constant_names);
+            let src_a_asm_type = tacky_value_type_asm(src_a, symbol_table);
 
-            let signed_operands = tacky_value_type_is_signed(src_a, symbol_table);
-            match op {
-                tacky::BinaryOperator::Divide => {
-                    if signed_operands {
-                        vec![
-                            Instruction::Mov(
-                                src_a_asm_type.clone(),
-                                src_a_asm_op,
-                                Operand::Reg(Reg::AX),
-                            ),
-                            Instruction::Cdq(src_a_asm_type.clone()),
-                            Instruction::Idiv(src_a_asm_type.clone(), src_b_asm_op),
-                            Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::AX), dst_asm_op),
-                        ]
-                    } else {
-                        vec![
-                            Instruction::Mov(
-                                src_a_asm_type.clone(),
-                                src_a_asm_op,
-                                Operand::Reg(Reg::AX),
-                            ),
-                            Instruction::Mov(
-                                src_a_asm_type.clone(),
-                                Operand::Imm(0),
-                                Operand::Reg(Reg::DX),
-                            ),
-                            Instruction::Div(src_a_asm_type.clone(), src_b_asm_op),
-                            Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::AX), dst_asm_op),
-                        ]
-                    }
+            let dst_asm_op = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
+            let dst_asm_type = tacky_value_type_asm(dst, symbol_table);
+
+            let ty = tacky_value_type(src_a, symbol_table);
+
+            match (op, ty) {
+                (tacky::BinaryOperator::Divide, ty) if ty.signed() && ty.is_integer() => {
+                    vec![
+                        Instruction::Mov(
+                            src_a_asm_type.clone(),
+                            src_a_asm_op,
+                            Operand::Reg(Reg::AX),
+                        ),
+                        Instruction::Cdq(src_a_asm_type.clone()),
+                        Instruction::Idiv(src_a_asm_type.clone(), src_b_asm_op),
+                        Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::AX), dst_asm_op),
+                    ]
                 }
-                tacky::BinaryOperator::Remainder => {
-                    if signed_operands {
-                        vec![
-                            Instruction::Mov(
-                                src_a_asm_type.clone(),
-                                src_a_asm_op,
-                                Operand::Reg(Reg::AX),
-                            ),
-                            Instruction::Cdq(src_a_asm_type.clone()),
-                            Instruction::Idiv(src_a_asm_type.clone(), src_b_asm_op),
-                            Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::DX), dst_asm_op),
-                        ]
-                    } else {
-                        vec![
-                            Instruction::Mov(
-                                src_a_asm_type.clone(),
-                                src_a_asm_op,
-                                Operand::Reg(Reg::AX),
-                            ),
-                            Instruction::Mov(
-                                src_a_asm_type.clone(),
-                                Operand::Imm(0),
-                                Operand::Reg(Reg::DX),
-                            ),
-                            Instruction::Div(src_a_asm_type.clone(), src_b_asm_op),
-                            Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::DX), dst_asm_op),
-                        ]
-                    }
+                (tacky::BinaryOperator::Divide, ty) if !ty.signed() && ty.is_integer() => {
+                    vec![
+                        Instruction::Mov(
+                            src_a_asm_type.clone(),
+                            src_a_asm_op,
+                            Operand::Reg(Reg::AX),
+                        ),
+                        Instruction::Mov(
+                            src_a_asm_type.clone(),
+                            Operand::Imm(0),
+                            Operand::Reg(Reg::DX),
+                        ),
+                        Instruction::Div(src_a_asm_type.clone(), src_b_asm_op),
+                        Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::AX), dst_asm_op),
+                    ]
+                }
+                (tacky::BinaryOperator::Divide, Type::Double) => {
+                    vec![
+                        Instruction::Mov(src_a_asm_type.clone(), src_a_asm_op, dst_asm_op.clone()),
+                        Instruction::Binary(
+                            BinaryOperator::DivDouble,
+                            src_a_asm_type.clone(),
+                            src_b_asm_op,
+                            dst_asm_op,
+                        ),
+                    ]
+                }
+                (tacky::BinaryOperator::Remainder, ty) if ty.signed() => {
+                    vec![
+                        Instruction::Mov(
+                            src_a_asm_type.clone(),
+                            src_a_asm_op,
+                            Operand::Reg(Reg::AX),
+                        ),
+                        Instruction::Cdq(src_a_asm_type.clone()),
+                        Instruction::Idiv(src_a_asm_type.clone(), src_b_asm_op),
+                        Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::DX), dst_asm_op),
+                    ]
+                }
+                (tacky::BinaryOperator::Remainder, ty) if ty.is_integer() => {
+                    vec![
+                        Instruction::Mov(
+                            src_a_asm_type.clone(),
+                            src_a_asm_op,
+                            Operand::Reg(Reg::AX),
+                        ),
+                        Instruction::Mov(
+                            src_a_asm_type.clone(),
+                            Operand::Imm(0),
+                            Operand::Reg(Reg::DX),
+                        ),
+                        Instruction::Div(src_a_asm_type.clone(), src_b_asm_op),
+                        Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::DX), dst_asm_op),
+                    ]
                 }
 
-                tacky::BinaryOperator::Equal
-                | tacky::BinaryOperator::NotEqual
-                | tacky::BinaryOperator::LessThan
-                | tacky::BinaryOperator::LessOrEqual
-                | tacky::BinaryOperator::GreaterThan
-                | tacky::BinaryOperator::GreaterOrEqual => {
-                    let cond_code = if signed_operands {
+                (
+                    tacky::BinaryOperator::Equal
+                    | tacky::BinaryOperator::NotEqual
+                    | tacky::BinaryOperator::LessThan
+                    | tacky::BinaryOperator::LessOrEqual
+                    | tacky::BinaryOperator::GreaterThan
+                    | tacky::BinaryOperator::GreaterOrEqual,
+                    ty,
+                ) if ty.is_integer() || ty.is_floating_point() => {
+                    let cond_code = if ty.signed() && ty.is_integer() {
                         tacky_binop_to_cond_asm(op)
                     } else {
                         tacky_unsigned_binop_to_cond_asm(op)
@@ -194,61 +255,104 @@ pub fn tacky_instruction_to_asm(
                     ]
                 }
 
-                _ => {
+                (
+                    tacky::BinaryOperator::Add
+                    | tacky::BinaryOperator::Subtract
+                    | tacky::BinaryOperator::Multiply,
+                    _,
+                ) => {
                     let binop_asm_op = tacky_binop_to_binop_asm(op);
+
                     vec![
                         Instruction::Mov(src_a_asm_type.clone(), src_a_asm_op, dst_asm_op.clone()),
                         Instruction::Binary(binop_asm_op, src_a_asm_type, src_b_asm_op, dst_asm_op),
                     ]
                 }
+
+                _ => panic!("Unsupported binary operator/type combination in codegen"),
             }
         }
         tacky::Instruction::Copy(src, dst) => {
-            let src_asm_type = tacky_value_type(src, symbol_table);
-            let src_asm_op = tacky_val_to_asm_operand(src);
-            let dst_asm_op = tacky_val_to_asm_operand(dst);
+            let src_asm_type = tacky_value_type_asm(src, symbol_table);
+            let src_asm_op = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+            let dst_asm_op = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
             vec![Instruction::Mov(src_asm_type, src_asm_op, dst_asm_op)]
         }
         tacky::Instruction::Jump(label) => vec![Instruction::Jmp(label.to_string())],
         tacky::Instruction::JumpIfZero(cond, label) => {
-            let cond_asm_type = tacky_value_type(cond, symbol_table);
-            let cond_asm_op = tacky_val_to_asm_operand(cond);
+            let cond_asm_type = tacky_value_type_asm(cond, symbol_table);
+            let cond_asm_op = tacky_val_to_asm_operand(cond, symbol_table, static_constant_names);
             vec![
                 Instruction::Cmp(cond_asm_type, Operand::Imm(0), cond_asm_op),
                 Instruction::JmpCC(CondCode::E, label.to_string()),
             ]
         }
         tacky::Instruction::JumpIfNotZero(cond, label) => {
-            let cond_asm_type = tacky_value_type(cond, symbol_table);
-            let cond_asm_op = tacky_val_to_asm_operand(cond);
+            let cond_asm_type = tacky_value_type_asm(cond, symbol_table);
+            let cond_asm_op = tacky_val_to_asm_operand(cond, symbol_table, static_constant_names);
             vec![
                 Instruction::Cmp(cond_asm_type, Operand::Imm(0), cond_asm_op),
                 Instruction::JmpCC(CondCode::NE, label.to_string()),
             ]
         }
         tacky::Instruction::Label(label) => vec![Instruction::Label(label.to_string())],
-        tacky::Instruction::FunCall(..) => tacky_fun_call_to_asm(tacky_function, symbol_table),
+        tacky::Instruction::FunCall(..) => {
+            tacky_fun_call_to_asm(tacky_function, symbol_table, static_constant_names)
+        }
         tacky::Instruction::SignExtend(src, dst) => {
-            let asm_src = tacky_val_to_asm_operand(src);
-            let asm_dst = tacky_val_to_asm_operand(dst);
+            let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+            let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
             vec![Instruction::Movsx(asm_src, asm_dst)]
         }
         tacky::Instruction::Truncate(src, dst) => {
-            let asm_src = tacky_val_to_asm_operand(src);
-            let asm_dst = tacky_val_to_asm_operand(dst);
+            let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+            let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
             vec![Instruction::Mov(AssemblyType::Longword, asm_src, asm_dst)]
         }
         tacky::Instruction::ZeroExtend(src, dst) => {
-            let asm_src = tacky_val_to_asm_operand(src);
-            let asm_dst = tacky_val_to_asm_operand(dst);
+            let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+            let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
             vec![Instruction::MovZeroExtend(asm_src, asm_dst)]
+        }
+        tacky::Instruction::IntToDouble(src, dst) => {
+            let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+            let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
+
+            let asm_src_type = tacky_value_type_asm(src, symbol_table);
+
+            vec![Instruction::Cvtsi2sd(asm_src_type, asm_src, asm_dst)]
+        }
+        tacky::Instruction::UIntToDouble(src, dst) => {
+            let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+            let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
+
+            let asm_src_type = tacky_value_type_asm(src, symbol_table);
+
+            vec![Instruction::Vcvtusi2sd(asm_src_type, asm_src, asm_dst)]
+        }
+        tacky::Instruction::DoubleToInt(src, dst) => {
+            let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+            let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
+
+            let asm_dst_type = tacky_value_type_asm(dst, symbol_table);
+
+            vec![Instruction::Cvttsd2si(asm_dst_type, asm_src, asm_dst)]
+        }
+        tacky::Instruction::DoubleToUInt(src, dst) => {
+            let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+            let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
+
+            let asm_dst_type = tacky_value_type_asm(dst, symbol_table);
+
+            vec![Instruction::Vcvttsd2usi(asm_dst_type, asm_src, asm_dst)]
         }
     }
 }
 
 pub fn tacky_fun_call_to_asm(
     tacky_fun_call: &tacky::Instruction,
-    symbol_table: &SymbolTable,
+    symbol_table: &mut SymbolTable,
+    static_constant_names: &mut HashMap<String, StaticInit>,
 ) -> Vec<Instruction> {
     let tacky::Instruction::FunCall(identifier, args, dst) = tacky_fun_call else {
         panic!("Expected a function call instruction");
@@ -274,8 +378,8 @@ pub fn tacky_fun_call_to_asm(
     // Pass args according to ABI
     for i in 0..args.len() {
         if i < reg_order.len() {
-            let asm_arg_type = tacky_value_type(&args[i], symbol_table);
-            let asm_arg = tacky_val_to_asm_operand(&args[i]);
+            let asm_arg_type = tacky_value_type_asm(&args[i], symbol_table);
+            let asm_arg = tacky_val_to_asm_operand(&args[i], symbol_table, static_constant_names);
             let dst = Operand::Reg(reg_order[i].clone());
             instructions.push(Instruction::Mov(asm_arg_type, asm_arg, dst));
         } else {
@@ -283,8 +387,8 @@ pub fn tacky_fun_call_to_asm(
             let stack_arg_number = i - reg_order.len();
             let tacky_arg = &args[args.len() - 1 - stack_arg_number];
 
-            let asm_arg_type = tacky_value_type(tacky_arg, symbol_table);
-            let asm_arg = tacky_val_to_asm_operand(tacky_arg);
+            let asm_arg_type = tacky_value_type_asm(tacky_arg, symbol_table);
+            let asm_arg = tacky_val_to_asm_operand(tacky_arg, symbol_table, static_constant_names);
 
             let pushable = match asm_arg {
                 Operand::Imm(_) | Operand::Reg(_) => true,
@@ -320,8 +424,8 @@ pub fn tacky_fun_call_to_asm(
     }
 
     // Retrieve return value
-    let dst_asm_op = tacky_val_to_asm_operand(dst);
-    let dst_asm_type = tacky_value_type(dst, symbol_table);
+    let dst_asm_op = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
+    let dst_asm_type = tacky_value_type_asm(dst, symbol_table);
     instructions.push(Instruction::Mov(
         dst_asm_type,
         Operand::Reg(Reg::AX),
@@ -331,13 +435,45 @@ pub fn tacky_fun_call_to_asm(
     instructions
 }
 
-pub fn tacky_val_to_asm_operand(tacky_function: &tacky::Val) -> Operand {
+pub fn tacky_val_to_asm_operand(
+    tacky_function: &tacky::Val,
+    symbol_table: &mut SymbolTable,
+    static_constant_names: &mut HashMap<String, StaticInit>,
+) -> Operand {
     match tacky_function {
         tacky::Val::Constant(c) => match c {
             Const::ConstInt(i) => Operand::Imm(*i as i128),
             Const::ConstUInt(u) => Operand::Imm(*u as i128),
             Const::ConstLong(i) => Operand::Imm(*i as i128),
             Const::ConstULong(u) => Operand::Imm(*u as i128),
+            Const::ConstDouble(f) => {
+                // Float constants are stored in the read only data section
+                let existing_const = static_constant_names.iter().find_map(|(name, init)| {
+                    if let StaticInit::DoubleInit(existing_f) = init {
+                        if *existing_f == *f {
+                            return Some(name.clone());
+                        }
+                    }
+                    None
+                });
+
+                // If a constant already exists with the same value, reuse it
+                if let Some(existing_const_name) = existing_const {
+                    Operand::Data(existing_const_name)
+                } else {
+                    let const_name = symbol_table.unique_var_name();
+                    let init_value = StaticInit::DoubleInit(*f);
+                    symbol_table.insert_static_variable(
+                        &const_name,
+                        false,
+                        Some(InitialValue::Initial(init_value)),
+                        &Type::Double,
+                    );
+                    static_constant_names.insert(const_name.clone(), StaticInit::DoubleInit(*f));
+
+                    Operand::Data(const_name)
+                }
+            }
         },
         tacky::Val::Var(s) => Operand::Pseudo(s.to_string()),
     }
@@ -386,7 +522,7 @@ pub fn tacky_unsigned_binop_to_cond_asm(tacky_binop: &tacky::BinaryOperator) -> 
     }
 }
 
-pub fn tacky_value_type(tacky_val: &tacky::Val, symbol_table: &SymbolTable) -> AssemblyType {
+pub fn tacky_value_type_asm(tacky_val: &tacky::Val, symbol_table: &SymbolTable) -> AssemblyType {
     match tacky_val {
         tacky::Val::Var(var_name) => {
             let var_info = symbol_table
@@ -400,6 +536,7 @@ pub fn tacky_value_type(tacky_val: &tacky::Val, symbol_table: &SymbolTable) -> A
             Const::ConstUInt(_) => AssemblyType::Longword,
             Const::ConstLong(_) => AssemblyType::Quadword,
             Const::ConstULong(_) => AssemblyType::Quadword,
+            Const::ConstDouble(_) => AssemblyType::Double,
         },
     }
 }
@@ -423,6 +560,26 @@ pub fn symbol_type_to_asm_type(tacky_type: &Type) -> AssemblyType {
         Type::UInt => AssemblyType::Longword,
         Type::Long => AssemblyType::Quadword,
         Type::ULong => AssemblyType::Quadword,
+        Type::Double => AssemblyType::Double,
         _ => panic!("Unsupported type for assembly codegen"),
+    }
+}
+
+pub fn tacky_value_type(tacky_val: &tacky::Val, symbol_table: &SymbolTable) -> Type {
+    match tacky_val {
+        tacky::Val::Var(var_name) => {
+            let var_info = symbol_table
+                .get(var_name)
+                .expect(&format!("Variable {} not found in symbol table", var_name));
+
+            var_info.ty.clone()
+        }
+        tacky::Val::Constant(c) => match c {
+            Const::ConstInt(_) => Type::Int,
+            Const::ConstUInt(_) => Type::UInt,
+            Const::ConstLong(_) => Type::Long,
+            Const::ConstULong(_) => Type::ULong,
+            Const::ConstDouble(_) => Type::Double,
+        },
     }
 }

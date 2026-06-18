@@ -88,7 +88,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let asm_ast = codegen::codegen_program(&tacky_ast, &symbol_table);
+    let asm_ast = codegen::codegen_program(&tacky_ast, &mut symbol_table);
 
     if args.codegen {
         return Ok(());

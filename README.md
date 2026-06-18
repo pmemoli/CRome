@@ -11,6 +11,7 @@ Currently in chapter 13 / 20, finished part 1.
 TODO:
 
 - Chapter 13 codegen
+- Refactor and clean code before chapter 14, quality drifted a bit xd
 
 Backlog:
 

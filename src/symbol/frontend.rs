@@ -69,6 +69,18 @@ impl Type {
             Type::FunType(_, _) => panic!("Functions do not have signedness"),
         }
     }
+
+    pub fn is_function(&self) -> bool {
+        matches!(self, Type::FunType(_, _))
+    }
+
+    pub fn is_integer(&self) -> bool {
+        matches!(self, Type::Int | Type::UInt | Type::Long | Type::ULong)
+    }
+
+    pub fn is_floating_point(&self) -> bool {
+        matches!(self, Type::Double)
+    }
 }
 
 impl SymbolTable {
