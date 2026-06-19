@@ -134,7 +134,17 @@ pub fn tacky_instruction_to_asm(
                     ]
                 }
                 (tacky::UnaryOperator::Not, t) if t.is_floating_point() => {
-                    vec![]
+                    vec![
+                        Instruction::Binary(
+                            BinaryOperator::Xor,
+                            src_asm_type.clone(),
+                            src_asm_op.clone(),
+                            dst_asm_op.clone(),
+                        ),
+                        Instruction::Cmp(src_asm_type, src_asm_op, dst_asm_op.clone()),
+                        Instruction::Mov(dst_asm_type, Operand::Imm(0), dst_asm_op.clone()),
+                        Instruction::SetCC(CondCode::E, dst_asm_op),
+                    ]
                 }
                 (tacky::UnaryOperator::Complement, _) => {
                     vec![
@@ -142,14 +152,25 @@ pub fn tacky_instruction_to_asm(
                         Instruction::Unary(UnaryOperator::Not, src_asm_type, dst_asm_op),
                     ]
                 }
+                (tacky::UnaryOperator::Negate, t) if t.is_floating_point() => {
+                    let zero_constant_name =
+                        create_float_constant(-0.0, symbol_table, static_constant_names);
+
+                    vec![
+                        Instruction::Mov(src_asm_type.clone(), src_asm_op, dst_asm_op.clone()),
+                        Instruction::Binary(
+                            BinaryOperator::Xor,
+                            src_asm_type.clone(),
+                            Operand::Data(zero_constant_name),
+                            dst_asm_op.clone(),
+                        ),
+                    ]
+                }
                 (tacky::UnaryOperator::Negate, t) if t.is_integer() => {
                     vec![
                         Instruction::Mov(src_asm_type.clone(), src_asm_op, dst_asm_op.clone()),
                         Instruction::Unary(UnaryOperator::Neg, src_asm_type, dst_asm_op),
                     ]
-                }
-                (tacky::UnaryOperator::Negate, t) if t.is_floating_point() => {
-                    vec![]
                 }
                 _ => panic!("Unsupported unary operator/type combination in codegen"),
             }
@@ -282,18 +303,58 @@ pub fn tacky_instruction_to_asm(
         tacky::Instruction::JumpIfZero(cond, label) => {
             let cond_asm_type = tacky_value_type_asm(cond, symbol_table);
             let cond_asm_op = tacky_val_to_asm_operand(cond, symbol_table, static_constant_names);
-            vec![
-                Instruction::Cmp(cond_asm_type, Operand::Imm(0), cond_asm_op),
-                Instruction::JmpCC(CondCode::E, label.to_string()),
-            ]
+            let ty = tacky_value_type(cond, symbol_table);
+
+            match ty {
+                t if t.is_floating_point() => {
+                    vec![
+                        Instruction::Binary(
+                            BinaryOperator::Xor,
+                            AssemblyType::Double,
+                            Operand::Reg(Reg::XMM14),
+                            Operand::Reg(Reg::XMM14),
+                        ),
+                        Instruction::Cmp(
+                            AssemblyType::Double,
+                            cond_asm_op,
+                            Operand::Reg(Reg::XMM14),
+                        ),
+                        Instruction::JmpCC(CondCode::E, label.to_string()),
+                    ]
+                }
+                _ => vec![
+                    Instruction::Cmp(cond_asm_type, Operand::Imm(0), cond_asm_op),
+                    Instruction::JmpCC(CondCode::E, label.to_string()),
+                ],
+            }
         }
         tacky::Instruction::JumpIfNotZero(cond, label) => {
             let cond_asm_type = tacky_value_type_asm(cond, symbol_table);
             let cond_asm_op = tacky_val_to_asm_operand(cond, symbol_table, static_constant_names);
-            vec![
-                Instruction::Cmp(cond_asm_type, Operand::Imm(0), cond_asm_op),
-                Instruction::JmpCC(CondCode::NE, label.to_string()),
-            ]
+            let ty = tacky_value_type(cond, symbol_table);
+
+            match ty {
+                t if t.is_floating_point() => {
+                    vec![
+                        Instruction::Binary(
+                            BinaryOperator::Xor,
+                            AssemblyType::Double,
+                            Operand::Reg(Reg::XMM14),
+                            Operand::Reg(Reg::XMM14),
+                        ),
+                        Instruction::Cmp(
+                            AssemblyType::Double,
+                            cond_asm_op,
+                            Operand::Reg(Reg::XMM14),
+                        ),
+                        Instruction::JmpCC(CondCode::NE, label.to_string()),
+                    ]
+                }
+                _ => vec![
+                    Instruction::Cmp(cond_asm_type, Operand::Imm(0), cond_asm_op),
+                    Instruction::JmpCC(CondCode::NE, label.to_string()),
+                ],
+            }
         }
         tacky::Instruction::Label(label) => vec![Instruction::Label(label.to_string())],
         tacky::Instruction::FunCall(..) => {
@@ -447,35 +508,44 @@ pub fn tacky_val_to_asm_operand(
             Const::ConstLong(i) => Operand::Imm(*i as i128),
             Const::ConstULong(u) => Operand::Imm(*u as i128),
             Const::ConstDouble(f) => {
-                // Float constants are stored in the read only data section
-                let existing_const = static_constant_names.iter().find_map(|(name, init)| {
-                    if let StaticInit::DoubleInit(existing_f) = init {
-                        if *existing_f == *f {
-                            return Some(name.clone());
-                        }
-                    }
-                    None
-                });
-
-                // If a constant already exists with the same value, reuse it
-                if let Some(existing_const_name) = existing_const {
-                    Operand::Data(existing_const_name)
-                } else {
-                    let const_name = symbol_table.unique_var_name();
-                    let init_value = StaticInit::DoubleInit(*f);
-                    symbol_table.insert_static_variable(
-                        &const_name,
-                        false,
-                        Some(InitialValue::Initial(init_value)),
-                        &Type::Double,
-                    );
-                    static_constant_names.insert(const_name.clone(), StaticInit::DoubleInit(*f));
-
-                    Operand::Data(const_name)
-                }
+                let const_name = create_float_constant(*f, symbol_table, static_constant_names);
+                Operand::Data(const_name)
             }
         },
         tacky::Val::Var(s) => Operand::Pseudo(s.to_string()),
+    }
+}
+
+pub fn create_float_constant(
+    f: f64,
+    symbol_table: &mut SymbolTable,
+    static_constant_names: &mut HashMap<String, StaticInit>,
+) -> String {
+    // Float constants are stored in the read only data section
+    let existing_const = static_constant_names.iter().find_map(|(name, init)| {
+        if let StaticInit::DoubleInit(existing_f) = init {
+            if *existing_f == f {
+                return Some(name.clone());
+            }
+        }
+        None
+    });
+
+    // If a constant already exists with the same value, reuse it
+    if let Some(existing_const_name) = existing_const {
+        existing_const_name
+    } else {
+        let const_name = symbol_table.unique_var_name();
+        let init_value = StaticInit::DoubleInit(f);
+        symbol_table.insert_static_variable(
+            &const_name,
+            false,
+            Some(InitialValue::Initial(init_value)),
+            &Type::Double,
+        );
+        static_constant_names.insert(const_name.clone(), StaticInit::DoubleInit(f));
+
+        const_name
     }
 }
 
