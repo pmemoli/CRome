@@ -90,6 +90,8 @@ fn main() -> Result<()> {
 
     let asm_ast = codegen::codegen_program(&tacky_ast, &mut symbol_table);
 
+    println!("Assembly AST: {:#?}", asm_ast);
+
     if args.codegen {
         return Ok(());
     }

@@ -14,15 +14,14 @@ pub enum AssemblyType {
 }
 
 impl AssemblyType {
-    pub fn alignment(&self) -> usize {
+    pub fn size(&self) -> usize {
         match self {
             Self::Longword => 4,
             Self::Quadword => 8,
             Self::Double => 8,
         }
     }
-
-    pub fn size(&self) -> usize {
+    pub fn alignment(&self) -> usize {
         match self {
             Self::Longword => 4,
             Self::Quadword => 8,
@@ -33,14 +32,8 @@ impl AssemblyType {
 
 #[derive(Debug, Clone)]
 pub enum BackendSymbolMetadata {
-    ObjEntry {
-        ty: AssemblyType,
-        is_static: bool,
-        is_constant: bool,
-    },
-    FunEntry {
-        defined: bool,
-    },
+    ObjEntry { ty: AssemblyType, is_static: bool },
+    FunEntry { defined: bool },
 }
 
 impl BackendSymbolTable {
@@ -65,11 +58,7 @@ impl BackendSymbolTable {
 
                     let is_static = matches!(info.metadata, SymbolMetadata::StaticVariable { .. });
 
-                    let entry = BackendSymbolMetadata::ObjEntry {
-                        ty,
-                        is_static,
-                        is_constant: false,
-                    };
+                    let entry = BackendSymbolMetadata::ObjEntry { ty, is_static };
                     new_map.insert(name.clone(), entry);
                 }
             }

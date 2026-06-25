@@ -35,9 +35,10 @@ pub fn instruction_fixup(instruction: &Instruction) -> Vec<Instruction> {
 pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Instruction> {
     match instruction {
         Instruction::Mov(ty, src, dst) if src.is_memory_operand() && dst.is_memory_operand() => {
+            let src_reg = src_register(ty);
             vec![
-                Instruction::Mov(ty.clone(), src.clone(), Operand::Reg(Reg::R10)),
-                Instruction::Mov(ty.clone(), Operand::Reg(Reg::R10), dst.clone()),
+                Instruction::Mov(ty.clone(), src.clone(), src_reg.clone()),
+                Instruction::Mov(ty.clone(), src_reg.clone(), dst.clone()),
             ]
         }
 
@@ -61,41 +62,41 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
             src,
             dst,
         ) if src.is_memory_operand() && dst.is_memory_operand() => {
+            let src_reg = src_register(ty);
             vec![
-                Instruction::Mov(ty.clone(), src.clone(), Operand::Reg(Reg::R10)),
-                Instruction::Binary(
-                    binop.clone(),
-                    ty.clone(),
-                    Operand::Reg(Reg::R10),
-                    dst.clone(),
-                ),
+                Instruction::Mov(ty.clone(), src.clone(), src_reg.clone()),
+                Instruction::Binary(binop.clone(), ty.clone(), src_reg, dst.clone()),
             ]
         }
 
         Instruction::Binary(BinaryOperator::Mult, ty, src, dst) if dst.is_memory_operand() => {
+            let dst_reg = dst_register(ty);
             vec![
-                Instruction::Mov(ty.clone(), dst.clone(), Operand::Reg(Reg::R11)),
+                Instruction::Mov(ty.clone(), dst.clone(), dst_reg.clone()),
                 Instruction::Binary(
                     BinaryOperator::Mult,
                     ty.clone(),
                     src.clone(),
-                    Operand::Reg(Reg::R11),
+                    dst_reg.clone(),
                 ),
-                Instruction::Mov(ty.clone(), Operand::Reg(Reg::R11), dst.clone()),
+                Instruction::Mov(ty.clone(), dst_reg, dst.clone()),
             ]
         }
 
         Instruction::Cmp(ty, src, dst) if src.is_memory_operand() && dst.is_memory_operand() => {
+            let src_reg = src_register(ty);
+
             vec![
-                Instruction::Mov(ty.clone(), src.clone(), Operand::Reg(Reg::R10)),
-                Instruction::Cmp(ty.clone(), Operand::Reg(Reg::R10), dst.clone()),
+                Instruction::Mov(ty.clone(), src.clone(), src_reg.clone()),
+                Instruction::Cmp(ty.clone(), src_reg.clone(), dst.clone()),
             ]
         }
 
         Instruction::Cmp(ty, src, dst @ Operand::Imm(_)) => {
+            let dst_reg = dst_register(ty);
             vec![
-                Instruction::Mov(ty.clone(), dst.clone(), Operand::Reg(Reg::R11)),
-                Instruction::Cmp(ty.clone(), src.clone(), Operand::Reg(Reg::R11)),
+                Instruction::Mov(ty.clone(), dst.clone(), dst_reg.clone()),
+                Instruction::Cmp(ty.clone(), src.clone(), dst_reg),
             ]
         }
 
@@ -106,7 +107,7 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
             ]
         }
 
-        // We only consider movslq (src is always a longword)
+        // These only correspond to extending longwords to quadwords (32 to 64 bits)
         Instruction::Movsx(src @ Operand::Imm(_), dst) if dst.is_memory_operand() => {
             vec![
                 Instruction::Mov(AssemblyType::Longword, src.clone(), Operand::Reg(Reg::R10)),
@@ -190,5 +191,19 @@ pub fn instruction_fixup_large_imm(instruction: &Instruction) -> Vec<Instruction
         }
 
         i => vec![i.clone()],
+    }
+}
+
+pub fn src_register(ty: &AssemblyType) -> Operand {
+    match ty {
+        AssemblyType::Double => Operand::Reg(Reg::XMM14),
+        _ => Operand::Reg(Reg::R10),
+    }
+}
+
+pub fn dst_register(ty: &AssemblyType) -> Operand {
+    match ty {
+        AssemblyType::Double => Operand::Reg(Reg::XMM15),
+        _ => Operand::Reg(Reg::R11),
     }
 }

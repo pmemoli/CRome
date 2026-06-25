@@ -44,28 +44,66 @@ pub fn tacky_top_level_to_asm(
             let mut asm_instructions = Vec::new();
 
             // Passes arguments as pseudovariables to later clobber caller saved registers freely
-            let reg_order = vec![Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
-            for i in 0..tacky_arguments.len() {
-                let arg = tacky_arguments[i].to_string();
+            let reg_int_order = vec![Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
+            let reg_float_order = vec![
+                Reg::XMM0,
+                Reg::XMM1,
+                Reg::XMM2,
+                Reg::XMM3,
+                Reg::XMM4,
+                Reg::XMM5,
+                Reg::XMM6,
+                Reg::XMM7,
+            ];
 
+            let mut reg_int_params = Vec::new();
+            let mut reg_float_params = Vec::new();
+            let mut stack_params = Vec::new();
+
+            for i in 0..tacky_arguments.len() {
+                let arg_name = &tacky_arguments[i];
+                let arg_type = symbol_table.identifier_type(arg_name).unwrap();
+
+                if arg_type.is_floating_point() {
+                    if reg_float_params.len() < reg_float_order.len() {
+                        reg_float_params.push(arg_name);
+                    } else {
+                        stack_params.push(arg_name);
+                    }
+                } else {
+                    if reg_int_params.len() < reg_int_order.len() {
+                        reg_int_params.push(arg_name);
+                    } else {
+                        stack_params.push(arg_name);
+                    }
+                }
+            }
+
+            for i in 0..reg_int_params.len() {
+                let arg = reg_int_params[i].to_string();
                 let arg_type = symbol_table.identifier_type(&arg).unwrap();
                 let arg_asm_type = symbol_type_to_asm_type(arg_type);
+                let src = Operand::Reg(reg_int_order[i].clone());
+                asm_instructions.push(Instruction::Mov(arg_asm_type, src, Operand::Pseudo(arg)));
+            }
 
-                if i < reg_order.len() {
-                    let src = Operand::Reg(reg_order[i].clone());
-                    asm_instructions.push(Instruction::Mov(
-                        arg_asm_type,
-                        src,
-                        Operand::Pseudo(arg),
-                    ));
-                } else {
-                    let j = i - reg_order.len();
-                    asm_instructions.push(Instruction::Mov(
-                        arg_asm_type,
-                        Operand::Stack(8 * (j + 2) as isize), // First arg is at RSP + 16 (old RBP + ret address)
-                        Operand::Pseudo(arg),
-                    ));
-                }
+            for i in 0..reg_float_params.len() {
+                let arg = reg_float_params[i].to_string();
+                let arg_type = symbol_table.identifier_type(&arg).unwrap();
+                let arg_asm_type = symbol_type_to_asm_type(arg_type);
+                let src = Operand::Reg(reg_float_order[i].clone());
+                asm_instructions.push(Instruction::Mov(arg_asm_type, src, Operand::Pseudo(arg)));
+            }
+
+            for i in 0..stack_params.len() {
+                let arg = stack_params[i].to_string();
+                let arg_type = symbol_table.identifier_type(&arg).unwrap();
+                let arg_asm_type = symbol_type_to_asm_type(arg_type);
+                asm_instructions.push(Instruction::Mov(
+                    arg_asm_type,
+                    Operand::Stack(8 * (i + 2) as isize), // First arg is at RSP + 16 (old RBP + ret address)
+                    Operand::Pseudo(arg),
+                ));
             }
 
             for instruction in tacky_instructions {
@@ -421,44 +459,82 @@ pub fn tacky_fun_call_to_asm(
 
     let mut instructions = Vec::new();
 
-    let reg_order = vec![Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
+    // Pass parameters according to ABI
+    let reg_int_order = vec![Reg::DI, Reg::SI, Reg::DX, Reg::CX, Reg::R8, Reg::R9];
+    let reg_float_order = vec![
+        Reg::XMM0,
+        Reg::XMM1,
+        Reg::XMM2,
+        Reg::XMM3,
+        Reg::XMM4,
+        Reg::XMM5,
+        Reg::XMM6,
+        Reg::XMM7,
+    ];
 
-    // Add padding to ensure stack is 16-byte aligned before call instruction
-    let stack_args = (args.len() as isize - reg_order.len() as isize).max(0) as usize;
-    let mut stack_padding = 0;
-    if stack_args % 2 == 1 {
-        stack_padding = 8;
+    let mut reg_int_params = Vec::new();
+    let mut reg_float_params = Vec::new();
+    let mut stack_params = Vec::new();
+
+    for i in 0..args.len() {
+        let arg = &args[i];
+        let arg_type = tacky_value_type(arg, symbol_table);
+
+        if arg_type.is_floating_point() {
+            if reg_float_params.len() < reg_float_order.len() {
+                reg_float_params.push(arg);
+            } else {
+                stack_params.push(arg);
+            }
+        } else {
+            if reg_int_params.len() < reg_int_order.len() {
+                reg_int_params.push(arg);
+            } else {
+                stack_params.push(arg);
+            }
+        }
+    }
+
+    // Add stack padding to ensure its 16-byte aligned
+    let stack_padding = if stack_params.len() % 2 == 1 {
         instructions.push(Instruction::Binary(
             BinaryOperator::Sub,
             AssemblyType::Quadword,
-            Operand::Imm(stack_padding),
+            Operand::Imm(8),
             Operand::Reg(Reg::SP),
-        ))
+        ));
+        8
+    } else {
+        0
+    };
+
+    for i in 0..reg_int_params.len() {
+        let arg = reg_int_params[i];
+        let asm_arg_type = tacky_value_type_asm(arg, symbol_table);
+        let asm_arg = tacky_val_to_asm_operand(arg, symbol_table, static_constant_names);
+        let dst = Operand::Reg(reg_int_order[i].clone());
+        instructions.push(Instruction::Mov(asm_arg_type, asm_arg, dst));
     }
 
-    // Pass args according to ABI
-    for i in 0..args.len() {
-        if i < reg_order.len() {
-            let asm_arg_type = tacky_value_type_asm(&args[i], symbol_table);
-            let asm_arg = tacky_val_to_asm_operand(&args[i], symbol_table, static_constant_names);
-            let dst = Operand::Reg(reg_order[i].clone());
-            instructions.push(Instruction::Mov(asm_arg_type, asm_arg, dst));
-        } else {
-            // We push stack arguments in reverse order
-            let stack_arg_number = i - reg_order.len();
-            let tacky_arg = &args[args.len() - 1 - stack_arg_number];
+    for i in 0..reg_float_params.len() {
+        let arg = reg_float_params[i];
+        let asm_arg_type = tacky_value_type_asm(arg, symbol_table);
+        let asm_arg = tacky_val_to_asm_operand(arg, symbol_table, static_constant_names);
+        let dst = Operand::Reg(reg_float_order[i].clone());
+        instructions.push(Instruction::Mov(asm_arg_type, asm_arg, dst));
+    }
 
-            let asm_arg_type = tacky_value_type_asm(tacky_arg, symbol_table);
-            let asm_arg = tacky_val_to_asm_operand(tacky_arg, symbol_table, static_constant_names);
+    for i in (0..stack_params.len()).rev() {
+        let arg = stack_params[i];
+        let asm_arg_type = tacky_value_type_asm(arg, symbol_table);
+        let asm_arg = tacky_val_to_asm_operand(arg, symbol_table, static_constant_names);
 
-            let pushable = match asm_arg {
-                Operand::Imm(_) | Operand::Reg(_) => true,
-                Operand::Pseudo(_) | Operand::Stack(_) | Operand::Data(_) => false,
-            };
-
-            if pushable {
+        // Could be fixed in the instruction fixup pass, but whatever
+        match asm_arg {
+            Operand::Imm(_) | Operand::Reg(_) => {
                 instructions.push(Instruction::Push(asm_arg));
-            } else {
+            }
+            Operand::Pseudo(_) | Operand::Stack(_) | Operand::Data(_) => {
                 instructions.push(Instruction::Mov(
                     asm_arg_type,
                     asm_arg,
@@ -473,8 +549,7 @@ pub fn tacky_fun_call_to_asm(
     instructions.push(Instruction::Call(identifier.to_string()));
 
     // Cleanup arguments
-    let stack_arguments = (args.len() as isize - reg_order.len() as isize).max(0) as usize;
-    let bytes_to_cleanup = stack_arguments * 8 + stack_padding as usize;
+    let bytes_to_cleanup = stack_params.len() * 8 + stack_padding as usize;
     if bytes_to_cleanup > 0 {
         instructions.push(Instruction::Binary(
             BinaryOperator::Add,
@@ -487,11 +562,23 @@ pub fn tacky_fun_call_to_asm(
     // Retrieve return value
     let dst_asm_op = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
     let dst_asm_type = tacky_value_type_asm(dst, symbol_table);
-    instructions.push(Instruction::Mov(
-        dst_asm_type,
-        Operand::Reg(Reg::AX),
-        dst_asm_op,
-    ));
+
+    match dst_asm_type {
+        AssemblyType::Double => {
+            instructions.push(Instruction::Mov(
+                dst_asm_type,
+                Operand::Reg(Reg::XMM0),
+                dst_asm_op.clone(),
+            ));
+        }
+        _ => {
+            instructions.push(Instruction::Mov(
+                dst_asm_type,
+                Operand::Reg(Reg::AX),
+                dst_asm_op,
+            ));
+        }
+    }
 
     instructions
 }
@@ -549,16 +636,6 @@ pub fn create_float_constant(
     }
 }
 
-pub fn tacky_unop_to_unop_asm(tacky_unop: &tacky::UnaryOperator) -> UnaryOperator {
-    match tacky_unop {
-        tacky::UnaryOperator::Complement => UnaryOperator::Not,
-        tacky::UnaryOperator::Negate => UnaryOperator::Neg,
-        _ => panic!(
-            "Can't convert non-complement/non-negate unary operator to unary operator in codegen"
-        ),
-    }
-}
-
 pub fn tacky_binop_to_binop_asm(tacky_binop: &tacky::BinaryOperator) -> BinaryOperator {
     match tacky_binop {
         tacky::BinaryOperator::Add => BinaryOperator::Add,
@@ -608,19 +685,6 @@ pub fn tacky_value_type_asm(tacky_val: &tacky::Val, symbol_table: &SymbolTable) 
             Const::ConstULong(_) => AssemblyType::Quadword,
             Const::ConstDouble(_) => AssemblyType::Double,
         },
-    }
-}
-
-pub fn tacky_value_type_is_signed(tacky_val: &tacky::Val, symbol_table: &SymbolTable) -> bool {
-    match tacky_val {
-        tacky::Val::Var(var_name) => {
-            let var_info = symbol_table
-                .get(var_name)
-                .expect(&format!("Variable {} not found in symbol table", var_name));
-
-            var_info.ty.signed()
-        }
-        tacky::Val::Constant(c) => matches!(c, Const::ConstInt(_) | Const::ConstLong(_)),
     }
 }
 
