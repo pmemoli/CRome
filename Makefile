@@ -8,5 +8,5 @@ run-debug:
 
 test:
 	cargo build
-	./tests/test_compiler ./target/debug/crab --chapter 13 --stage tacky
+	./tests/test_compiler ./target/debug/crab --chapter 13
 

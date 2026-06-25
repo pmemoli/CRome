@@ -105,6 +105,10 @@ impl Operand {
             false
         }
     }
+
+    pub fn is_register_operand(&self) -> bool {
+        matches!(self, Operand::Reg(_))
+    }
 }
 
 // cond_code = E | NE | G | GE | L | LE | A | AE | B | BE

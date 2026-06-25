@@ -8,4 +8,5 @@ anyhow = "1.0.102"
 clap = { version = "4.5.60", features = ["derive"] }
 ordered-float = "5.3.0"
 regex = "1.12.3"
+rust_decimal = "1.42.1"
 tempfile = "3.26.0"

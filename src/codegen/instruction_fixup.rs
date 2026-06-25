@@ -25,6 +25,7 @@ pub fn instruction_fixup_top_level(top_level: &TopLevel) -> TopLevel {
     }
 }
 
+// Very weird logic, not modular and doesn't scale at all
 pub fn instruction_fixup(instruction: &Instruction) -> Vec<Instruction> {
     instruction_fixup_large_imm(instruction)
         .iter()
@@ -43,16 +44,35 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
         }
 
         Instruction::Idiv(ty, op @ Operand::Imm(_)) => {
+            let src_reg = src_register(ty);
             vec![
-                Instruction::Mov(ty.clone(), op.clone(), Operand::Reg(Reg::R10)),
-                Instruction::Idiv(ty.clone(), Operand::Reg(Reg::R10)),
+                Instruction::Mov(ty.clone(), op.clone(), src_reg.clone()),
+                Instruction::Idiv(ty.clone(), src_reg),
             ]
         }
 
         Instruction::Div(ty, op @ Operand::Imm(_)) => {
+            let src_reg = src_register(ty);
             vec![
-                Instruction::Mov(ty.clone(), op.clone(), Operand::Reg(Reg::R10)),
-                Instruction::Div(ty.clone(), Operand::Reg(Reg::R10)),
+                Instruction::Mov(ty.clone(), op.clone(), src_reg.clone()),
+                Instruction::Div(ty.clone(), src_reg),
+            ]
+        }
+
+        // Double binops need to have dst as a register (checked before integer mem-mem)
+        Instruction::Binary(binop, AssemblyType::Double, src, dst)
+            if !dst.is_register_operand() =>
+        {
+            let dst_reg = dst_register(&AssemblyType::Double);
+            vec![
+                Instruction::Mov(AssemblyType::Double, dst.clone(), dst_reg.clone()),
+                Instruction::Binary(
+                    binop.clone(),
+                    AssemblyType::Double,
+                    src.clone(),
+                    dst_reg.clone(),
+                ),
+                Instruction::Mov(AssemblyType::Double, dst_reg, dst.clone()),
             ]
         }
 
@@ -83,6 +103,15 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
             ]
         }
 
+        // Double cmp needs to have dst as a register
+        Instruction::Cmp(AssemblyType::Double, src, dst) if !dst.is_register_operand() => {
+            let dst_reg = dst_register(&AssemblyType::Double);
+            vec![
+                Instruction::Mov(AssemblyType::Double, dst.clone(), dst_reg.clone()),
+                Instruction::Cmp(AssemblyType::Double, src.clone(), dst_reg),
+            ]
+        }
+
         Instruction::Cmp(ty, src, dst) if src.is_memory_operand() && dst.is_memory_operand() => {
             let src_reg = src_register(ty);
 
@@ -101,26 +130,31 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
         }
 
         Instruction::Push(op) if op.is_memory_operand() => {
+            let src_reg = src_register(&AssemblyType::Quadword);
             vec![
-                Instruction::Mov(AssemblyType::Quadword, op.clone(), Operand::Reg(Reg::R10)),
-                Instruction::Push(Operand::Reg(Reg::R10)),
+                Instruction::Mov(AssemblyType::Quadword, op.clone(), src_reg.clone()),
+                Instruction::Push(src_reg),
             ]
         }
 
         // These only correspond to extending longwords to quadwords (32 to 64 bits)
         Instruction::Movsx(src @ Operand::Imm(_), dst) if dst.is_memory_operand() => {
+            let src_reg = src_register(&AssemblyType::Longword);
+            let dst_reg = dst_register(&AssemblyType::Quadword);
             vec![
-                Instruction::Mov(AssemblyType::Longword, src.clone(), Operand::Reg(Reg::R10)),
-                Instruction::Movsx(Operand::Reg(Reg::R10), Operand::Reg(Reg::R11)),
-                Instruction::Mov(AssemblyType::Quadword, Operand::Reg(Reg::R11), dst.clone()),
+                Instruction::Mov(AssemblyType::Longword, src.clone(), src_reg.clone()),
+                Instruction::Movsx(src_reg, dst_reg.clone()),
+                Instruction::Mov(AssemblyType::Quadword, dst_reg, dst.clone()),
             ]
         }
 
         Instruction::Movsx(src, dst) if src.is_memory_operand() && dst.is_memory_operand() => {
+            let src_reg = src_register(&AssemblyType::Longword);
+            let dst_reg = dst_register(&AssemblyType::Quadword);
             vec![
-                Instruction::Mov(AssemblyType::Longword, src.clone(), Operand::Reg(Reg::R10)),
-                Instruction::Movsx(Operand::Reg(Reg::R10), Operand::Reg(Reg::R11)),
-                Instruction::Mov(AssemblyType::Quadword, Operand::Reg(Reg::R11), dst.clone()),
+                Instruction::Mov(AssemblyType::Longword, src.clone(), src_reg.clone()),
+                Instruction::Movsx(src_reg, dst_reg.clone()),
+                Instruction::Mov(AssemblyType::Quadword, dst_reg, dst.clone()),
             ]
         }
 
@@ -133,9 +167,78 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
         }
 
         Instruction::MovZeroExtend(src, dst) if dst.is_memory_operand() => {
+            let dst_reg = dst_register(&AssemblyType::Quadword);
             vec![
-                Instruction::Mov(AssemblyType::Longword, src.clone(), Operand::Reg(Reg::R11)),
-                Instruction::Mov(AssemblyType::Quadword, Operand::Reg(Reg::R11), dst.clone()),
+                Instruction::Mov(AssemblyType::Longword, src.clone(), dst_reg.clone()),
+                Instruction::Mov(AssemblyType::Quadword, dst_reg, dst.clone()),
+            ]
+        }
+
+        // Signed integer to double need to have dst as a register, and src can't be const
+        Instruction::Cvtsi2sd(ty, src, dst)
+            if !dst.is_register_operand() || matches!(src, Operand::Imm(_)) =>
+        {
+            let mut out = Vec::new();
+
+            let src = if matches!(src, Operand::Imm(_)) {
+                let src_reg = src_register(ty);
+                out.push(Instruction::Mov(ty.clone(), src.clone(), src_reg.clone()));
+                src_reg
+            } else {
+                src.clone()
+            };
+
+            if dst.is_register_operand() {
+                out.push(Instruction::Cvtsi2sd(ty.clone(), src, dst.clone()));
+            } else {
+                let dst_reg = dst_register(&AssemblyType::Double);
+                out.push(Instruction::Cvtsi2sd(ty.clone(), src, dst_reg.clone()));
+                out.push(Instruction::Mov(AssemblyType::Double, dst_reg, dst.clone()));
+            }
+
+            out
+        }
+
+        // Unsigned integer to double need to have dst as a register, and src can't be const
+        Instruction::Vcvtusi2sd(ty, src, dst)
+            if !dst.is_register_operand() || matches!(src, Operand::Imm(_)) =>
+        {
+            let mut out = Vec::new();
+
+            let src = if matches!(src, Operand::Imm(_)) {
+                let src_reg = src_register(ty);
+                out.push(Instruction::Mov(ty.clone(), src.clone(), src_reg.clone()));
+                src_reg
+            } else {
+                src.clone()
+            };
+
+            if dst.is_register_operand() {
+                out.push(Instruction::Vcvtusi2sd(ty.clone(), src, dst.clone()));
+            } else {
+                let dst_reg = dst_register(&AssemblyType::Double);
+                out.push(Instruction::Vcvtusi2sd(ty.clone(), src, dst_reg.clone()));
+                out.push(Instruction::Mov(AssemblyType::Double, dst_reg, dst.clone()));
+            }
+
+            out
+        }
+
+        // Double to signed integer need to have dst as a register
+        Instruction::Cvttsd2si(ty, src, dst) if !dst.is_register_operand() => {
+            let dst_reg = dst_register(ty);
+            vec![
+                Instruction::Cvttsd2si(ty.clone(), src.clone(), dst_reg.clone()),
+                Instruction::Mov(ty.clone(), dst_reg, dst.clone()),
+            ]
+        }
+
+        // Double to unsigned integer need to have dst as a register
+        Instruction::Vcvttsd2usi(ty, src, dst) if !dst.is_register_operand() => {
+            let dst_reg = dst_register(ty);
+            vec![
+                Instruction::Vcvttsd2usi(ty.clone(), src.clone(), dst_reg.clone()),
+                Instruction::Mov(ty.clone(), dst_reg, dst.clone()),
             ]
         }
 

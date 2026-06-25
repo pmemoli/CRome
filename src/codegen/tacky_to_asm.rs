@@ -526,7 +526,6 @@ pub fn tacky_fun_call_to_asm(
 
     for i in (0..stack_params.len()).rev() {
         let arg = stack_params[i];
-        let asm_arg_type = tacky_value_type_asm(arg, symbol_table);
         let asm_arg = tacky_val_to_asm_operand(arg, symbol_table, static_constant_names);
 
         // Could be fixed in the instruction fixup pass, but whatever
@@ -536,7 +535,7 @@ pub fn tacky_fun_call_to_asm(
             }
             Operand::Pseudo(_) | Operand::Stack(_) | Operand::Data(_) => {
                 instructions.push(Instruction::Mov(
-                    asm_arg_type,
+                    AssemblyType::Quadword,
                     asm_arg,
                     Operand::Reg(Reg::R10),
                 ));

@@ -10,8 +10,8 @@ Currently in chapter 13 / 20, finished part 1.
 
 TODO:
 
-- Chapter 13 codegen
-- Refactor and clean code before chapter 14, quality drifted a bit xd
+- Chapter 13 emission
+- Refactor and clean code, quality drifted a bit xd
 
 Backlog:
 
@@ -229,7 +229,7 @@ reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11 | SP
 
 ### First pass (Tacky to ASM)
 
-1. Convert Tacky to ASM, without register allocation (using Pseudo(identifier) for variables).
+1. Convert Tacky to ASM, without register allocation (using Pseudo(identifier) for all variables).
 2. Copies arguments to pseudo variables at the start of each function, rather than using the corresponding registers/stack.
 
 ### Second pass (Register allocation)
