@@ -544,16 +544,16 @@ pub fn ast_expression_to_tacky(
 
             match (t, inner_type) {
                 // double (float) conversion
-                (Type::Int, Type::Double) => {
+                (Type::Int | Type::Long, Type::Double) => {
                     instructions.push(Instruction::DoubleToInt(result.clone(), dst.clone()))
                 }
-                (Type::UInt, Type::Double) => {
+                (Type::UInt | Type::ULong, Type::Double) => {
                     instructions.push(Instruction::DoubleToUInt(result.clone(), dst.clone()))
                 }
-                (Type::Double, Type::Int) => {
+                (Type::Double, Type::Int | Type::Long) => {
                     instructions.push(Instruction::IntToDouble(result.clone(), dst.clone()))
                 }
-                (Type::Double, Type::UInt) => {
+                (Type::Double, Type::UInt | Type::ULong) => {
                     instructions.push(Instruction::UIntToDouble(result.clone(), dst.clone()))
                 }
                 // integer conversion

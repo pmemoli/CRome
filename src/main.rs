@@ -18,11 +18,17 @@ struct Args {
     #[arg(help = "Source c file to compile")]
     source_file: String,
 
+    // Only generate relocatable object file
     #[arg(short = 'c')]
     c: bool,
 
+    // Link libraries
     #[arg(short = 'l')]
     l: Vec<String>,
+
+    // Debug info
+    #[arg(short = 'g')]
+    g: bool,
 
     #[arg(long)]
     lex: bool,
@@ -96,13 +102,10 @@ fn main() -> Result<()> {
 
     let asm_str = emission::emission_program(&asm_ast, &symbol_table);
 
-    println!("{}", asm_str);
-
     // Runs assembler and linker
     let assembly_file = Builder::new().suffix(".s").tempfile()?;
     let assembly_file_path = assembly_file.path();
-
-    fs::write(assembly_file_path, asm_str)?;
+    fs::write(assembly_file_path, asm_str.clone())?;
 
     let stem = source_file.strip_suffix(".c").unwrap_or(source_file);
     let output_file = if args.c {
@@ -114,17 +117,20 @@ fn main() -> Result<()> {
     let mut gcc_command = Command::new("gcc");
 
     if args.c {
-        gcc_command.arg("-c"); // Do not link, only generate object file
+        gcc_command.arg("-c"); // do not link, only generate object file
     }
 
-    for lib in &args.l {
-        gcc_command.arg(format!("l{}", lib));
+    if args.g {
+        let debug_assembly_file = format!("{}.s", stem);
+        fs::write(debug_assembly_file, asm_str.clone())?;
+        gcc_command.arg("-g"); // generate debug information
     }
 
     let status = gcc_command
         .arg(assembly_file_path)
         .arg("-o")
         .arg(&output_file)
+        .args(args.l.iter().map(|lib| format!("-l{}", lib)))
         .status()?;
 
     if !status.success() {

@@ -113,7 +113,7 @@ pub fn emission_top_level(asm_top_level: &codegen::TopLevel, symbol_table: &Symb
         codegen::TopLevel::StaticConstant(name, alignment, init) => {
             let alignment_directive = format!("    .align {}\n", alignment);
             let init_directive = match init {
-                StaticInit::DoubleInit(f) => format!("    .double {}\n", f),
+                StaticInit::DoubleInit(f) => format!("    .quad {}\n", f.to_bits()),
                 _ => panic!("Unsupported static constant type"),
             };
 
@@ -241,7 +241,7 @@ pub fn emission_instruction(
             let suffix = emission_type_suffix(ty);
             let src_str = emission_operand(src, operand_size_from_type(ty));
             let dst_str = emission_operand(dst, OperandSize::Qword);
-            format!("vcvtusi2sd{} {},{}", suffix, src_str, dst_str)
+            format!("vcvtusi2sd{} {},{},{}", suffix, src_str, dst_str, dst_str)
         }
         codegen::Instruction::Vcvttsd2usi(ty, src, dst) => {
             let src_str = emission_operand(src, OperandSize::Qword);

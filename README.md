@@ -6,11 +6,11 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS).
 
 After implementing the book's subset of C, the language will be extended with more optimizations and features as they are required for RomeOS.
 
-Currently in chapter 13 / 20, finished part 1.
+Currently in chapter 14 / 20, finished part 1.
 
 TODO:
 
-- Chapter 13 emission
+- Chapter 14
 - Refactor and clean code, quality drifted a bit xd
 
 Backlog:

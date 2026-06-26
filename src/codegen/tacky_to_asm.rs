@@ -2,8 +2,44 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::parser::Const;
-use crate::symbol::{InitialValue, Type};
+use crate::symbol::Type;
 use crate::tacky;
+
+// Static constant struct
+pub struct StaticConstants {
+    map: HashMap<String, StaticConstantData>,
+}
+
+pub struct StaticConstantData {
+    alignment: usize,
+    init: StaticInit,
+}
+
+impl StaticConstants {
+    pub fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+        }
+    }
+
+    pub fn get_by_value(&self, value: f64, alignment: usize) -> Option<&String> {
+        self.map.iter().find_map(|(name, data)| {
+            if let StaticInit::DoubleInit(existing_f) = &data.init {
+                if existing_f.to_bits() == value.to_bits() && data.alignment == alignment {
+                    return Some(name);
+                }
+            }
+            None
+        })
+    }
+
+    pub fn insert(&mut self, name: String, alignment: usize, value: f64) {
+        let init = StaticInit::DoubleInit(value);
+
+        self.map
+            .insert(name, StaticConstantData { alignment, init });
+    }
+}
 
 // First pass: Convert Tacky to ASM AST (with temp variables as pseudoregisters)
 pub fn tacky_program_to_asm(
@@ -13,7 +49,7 @@ pub fn tacky_program_to_asm(
     let tacky::Program(tacky_top_level) = tacky_program;
 
     let mut asm_top_level = Vec::new();
-    let mut static_constant_names = HashMap::new();
+    let mut static_constant_names = StaticConstants::new();
     for tacky_top_object in tacky_top_level {
         asm_top_level.push(tacky_top_level_to_asm(
             tacky_top_object,
@@ -22,8 +58,12 @@ pub fn tacky_program_to_asm(
         ));
     }
 
-    for (name, init) in &static_constant_names {
-        asm_top_level.push(TopLevel::StaticConstant(name.to_string(), 8, init.clone()));
+    for (name, data) in &static_constant_names.map {
+        asm_top_level.push(TopLevel::StaticConstant(
+            name.to_string(),
+            data.alignment,
+            data.init.clone(),
+        ));
     }
 
     Program(asm_top_level)
@@ -32,7 +72,7 @@ pub fn tacky_program_to_asm(
 pub fn tacky_top_level_to_asm(
     tacky_top_level: &tacky::TopLevel,
     symbol_table: &mut SymbolTable,
-    static_constant_names: &mut HashMap<String, StaticInit>,
+    static_constant_names: &mut StaticConstants,
 ) -> TopLevel {
     match tacky_top_level {
         tacky::TopLevel::Function(
@@ -127,7 +167,7 @@ pub fn tacky_top_level_to_asm(
 pub fn tacky_instruction_to_asm(
     tacky_function: &tacky::Instruction,
     symbol_table: &mut SymbolTable,
-    static_constant_names: &mut HashMap<String, StaticInit>,
+    static_constant_names: &mut StaticConstants,
 ) -> Vec<Instruction> {
     match tacky_function {
         tacky::Instruction::Return(val) => {
@@ -175,11 +215,15 @@ pub fn tacky_instruction_to_asm(
                     vec![
                         Instruction::Binary(
                             BinaryOperator::Xor,
-                            src_asm_type.clone(),
-                            src_asm_op.clone(),
-                            dst_asm_op.clone(),
+                            AssemblyType::Double,
+                            Operand::Reg(Reg::XMM14),
+                            Operand::Reg(Reg::XMM14),
                         ),
-                        Instruction::Cmp(src_asm_type, src_asm_op, dst_asm_op.clone()),
+                        Instruction::Cmp(
+                            AssemblyType::Double,
+                            src_asm_op,
+                            Operand::Reg(Reg::XMM14),
+                        ),
                         Instruction::Mov(dst_asm_type, Operand::Imm(0), dst_asm_op.clone()),
                         Instruction::SetCC(CondCode::E, dst_asm_op),
                     ]
@@ -191,14 +235,15 @@ pub fn tacky_instruction_to_asm(
                     ]
                 }
                 (tacky::UnaryOperator::Negate, t) if t.is_floating_point() => {
+                    // Xorpd needs this 16 byte aligned rather than just 8
                     let zero_constant_name =
-                        create_float_constant(-0.0, symbol_table, static_constant_names);
+                        create_float_constant(-0.0, 16, symbol_table, static_constant_names);
 
                     vec![
-                        Instruction::Mov(src_asm_type.clone(), src_asm_op, dst_asm_op.clone()),
+                        Instruction::Mov(AssemblyType::Double, src_asm_op, dst_asm_op.clone()),
                         Instruction::Binary(
                             BinaryOperator::Xor,
-                            src_asm_type.clone(),
+                            AssemblyType::Double,
                             Operand::Data(zero_constant_name),
                             dst_asm_op.clone(),
                         ),
@@ -451,7 +496,7 @@ pub fn tacky_instruction_to_asm(
 pub fn tacky_fun_call_to_asm(
     tacky_fun_call: &tacky::Instruction,
     symbol_table: &mut SymbolTable,
-    static_constant_names: &mut HashMap<String, StaticInit>,
+    static_constant_names: &mut StaticConstants,
 ) -> Vec<Instruction> {
     let tacky::Instruction::FunCall(identifier, args, dst) = tacky_fun_call else {
         panic!("Expected a function call instruction");
@@ -534,11 +579,12 @@ pub fn tacky_fun_call_to_asm(
                 instructions.push(Instruction::Push(asm_arg));
             }
             Operand::Pseudo(_) | Operand::Stack(_) | Operand::Data(_) => {
-                instructions.push(Instruction::Mov(
-                    AssemblyType::Quadword,
-                    asm_arg,
-                    Operand::Reg(Reg::R10),
-                ));
+                let asm_arg_type = tacky_value_type_asm(arg, symbol_table);
+                let mov_type = match asm_arg_type {
+                    AssemblyType::Longword => AssemblyType::Longword,
+                    _ => AssemblyType::Quadword,
+                };
+                instructions.push(Instruction::Mov(mov_type, asm_arg, Operand::Reg(Reg::R10)));
                 instructions.push(Instruction::Push(Operand::Reg(Reg::R10)));
             }
         }
@@ -585,7 +631,7 @@ pub fn tacky_fun_call_to_asm(
 pub fn tacky_val_to_asm_operand(
     tacky_function: &tacky::Val,
     symbol_table: &mut SymbolTable,
-    static_constant_names: &mut HashMap<String, StaticInit>,
+    static_constant_names: &mut StaticConstants,
 ) -> Operand {
     match tacky_function {
         tacky::Val::Constant(c) => match c {
@@ -594,7 +640,12 @@ pub fn tacky_val_to_asm_operand(
             Const::ConstLong(i) => Operand::Imm(*i as i128),
             Const::ConstULong(u) => Operand::Imm(*u as i128),
             Const::ConstDouble(f) => {
-                let const_name = create_float_constant(*f, symbol_table, static_constant_names);
+                let const_name = create_float_constant(
+                    *f,
+                    AssemblyType::Double.alignment(),
+                    symbol_table,
+                    static_constant_names,
+                );
                 Operand::Data(const_name)
             }
         },
@@ -604,33 +655,17 @@ pub fn tacky_val_to_asm_operand(
 
 pub fn create_float_constant(
     f: f64,
+    alignment: usize,
     symbol_table: &mut SymbolTable,
-    static_constant_names: &mut HashMap<String, StaticInit>,
+    static_constant_names: &mut StaticConstants,
 ) -> String {
-    // Float constants are stored in the read only data section
-    let existing_const = static_constant_names.iter().find_map(|(name, init)| {
-        if let StaticInit::DoubleInit(existing_f) = init {
-            if *existing_f == f {
-                return Some(name.clone());
-            }
-        }
-        None
-    });
+    let existing_const = static_constant_names.get_by_value(f, alignment);
 
-    // If a constant already exists with the same value, reuse it
     if let Some(existing_const_name) = existing_const {
-        existing_const_name
+        existing_const_name.clone()
     } else {
         let const_name = symbol_table.unique_var_name();
-        let init_value = StaticInit::DoubleInit(f);
-        symbol_table.insert_static_variable(
-            &const_name,
-            false,
-            Some(InitialValue::Initial(init_value)),
-            &Type::Double,
-        );
-        static_constant_names.insert(const_name.clone(), StaticInit::DoubleInit(f));
-
+        static_constant_names.insert(const_name.clone(), alignment, f);
         const_name
     }
 }
