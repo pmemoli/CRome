@@ -41,12 +41,14 @@ pub enum StaticInit {
     DoubleInit(f64),
 }
 
+// type = Int | Long | UInt | ULong | Float | Double | FunType(type* params, type ret)
 #[derive(PartialEq, Debug, Clone, Eq, Hash)]
 pub enum Type {
     Int,
     UInt,
     Long,
     ULong,
+    Float,
     Double,
     FunType(Vec<Type>, Box<Type>), // (param_types, return_type)
 }
@@ -54,7 +56,7 @@ pub enum Type {
 impl Type {
     pub fn byte_size(&self) -> usize {
         match self {
-            Type::Int | Type::UInt => 4,
+            Type::Int | Type::UInt | Type::Float => 4,
             Type::Long | Type::ULong => 8,
             Type::Double => 8,
             Type::FunType(_, _) => panic!("Functions do not have a byte size"),
@@ -63,9 +65,8 @@ impl Type {
 
     pub fn signed(&self) -> bool {
         match self {
-            Type::Int | Type::Long => true,
+            Type::Int | Type::Long | Type::Float | Type::Double => true,
             Type::UInt | Type::ULong => false,
-            Type::Double => true,
             Type::FunType(_, _) => panic!("Functions do not have signedness"),
         }
     }

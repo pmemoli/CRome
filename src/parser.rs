@@ -152,13 +152,14 @@ pub enum BinaryOperator {
 
 // const = ConstInt(int) | ConstLong(int)
 //     | ConstUInt(int) | ConstULong(int)
-//     | ConstDouble(double)
+//     | ConstDouble(double) | ConstFloat(float)
 #[derive(Debug, Clone)]
 pub enum Const {
     ConstInt(i32),
     ConstUInt(u32),
     ConstLong(i64),
     ConstULong(u64),
+    ConstFloat(f32),
     ConstDouble(f64),
 }
 

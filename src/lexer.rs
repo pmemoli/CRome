@@ -9,11 +9,13 @@ pub enum Token {
     UConstant(u32),
     LongConstant(i64),
     ULongConstant(u64),
+    SFloatConstant(OrderedFloat<f32>),
     DFloatConstant(OrderedFloat<f64>),
     SignedKeyword,
     UnsignedKeyword,
     LongKeyword,
     IntKeyword,
+    FloatKeyword,
     DoubleKeyword,
     VoidKeyword,
     ReturnKeyword,
@@ -82,7 +84,17 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
             Regex::new(r"^([0-9]+([lL][uU]|[uU][lL]))[^\w.]").unwrap(),
             |s| Token::ULongConstant(s[..s.len() - 3].parse::<u64>().unwrap()),
         ),
-        // Double Floating point constants
+        // Floating point constants
+        (
+            Regex::new(
+                r"^(([0-9]*\.[0-9]+|[0-9]+\.?)[Ee][+-]?[0-9]+|[0-9]*\.[0-9]+|[0-9]+\.)[fF][^\w.]",
+            )
+            .unwrap(),
+            |s| match s[..s.len() - 2].parse::<f32>() {
+                Ok(num) => Token::SFloatConstant(OrderedFloat(num)),
+                Err(_) => panic!("Unable to parse float constant to double."),
+            },
+        ),
         (
             Regex::new(
                 r"^(([0-9]*\.[0-9]+|[0-9]+\.?)[Ee][+-]?[0-9]+|[0-9]*\.[0-9]+|[0-9]+\.)[^\w.]",
@@ -100,6 +112,7 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
         }),
         (Regex::new(r"^long\b").unwrap(), |_| Token::LongKeyword),
         (Regex::new(r"^double\b").unwrap(), |_| Token::DoubleKeyword),
+        (Regex::new(r"^float\b").unwrap(), |_| Token::FloatKeyword),
         (Regex::new(r"^int\b").unwrap(), |_| Token::IntKeyword),
         (Regex::new(r"^void\b").unwrap(), |_| Token::VoidKeyword),
         (Regex::new(r"^return\b").unwrap(), |_| Token::ReturnKeyword),

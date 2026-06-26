@@ -10,8 +10,11 @@ Currently in chapter 14 / 20, finished part 1.
 
 TODO:
 
+- Floats
+- NaN
+- Refactor instruction fixup, its horrendous
+
 - Chapter 14
-- Refactor and clean code, quality drifted a bit xd
 
 Backlog:
 
@@ -26,7 +29,7 @@ program = Program(declaration*)
 declaration = FunDecl(function_declaration) | VarDecl(variable_declaration)
 variable_declaration = (identifier name, exp? init, type var_type, storage_class?)
 function_declaration = (identifier name, identifier* params, block? body, type fun_type, storage_class?)
-type = Int | Long | UInt | ULong | Double | FunType(type* params, type ret)
+type = Int | Long | UInt | ULong | Float | Double | FunType(type* params, type ret)
 storage_class = Static | Extern
 block = Block(block_item*)
 block_item = S(statement) | D(declaration)
@@ -55,7 +58,7 @@ binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
     | GreaterThan | GreaterOrEqual
 const = ConstInt(int) | ConstLong(int)
     | ConstUInt(int) | ConstULong(int)
-    | ConstDouble(double)
+    | ConstDouble(double) | ConstFloat(float)
 ```
 
 Loop related statements are annotated in the semantic analysis pass.
