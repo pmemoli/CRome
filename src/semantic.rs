@@ -1,10 +1,9 @@
-use crate::{parser, symbol::SymbolTable, symbol::Type};
+use crate::{parser, symbol::SymbolTable, types::Type};
 
 mod identifier_resolution;
 mod loop_annotation;
 mod type_checking;
 
-// Wrapper for semantic analysis passes
 pub fn semantic_analysis(ast: &parser::Program, symbol_table: &mut SymbolTable) -> parser::Program {
     let resolved_variable_ast = identifier_resolution::resolve_program(ast);
     let loop_labeled_ast = loop_annotation::label_program(&resolved_variable_ast);
@@ -13,7 +12,6 @@ pub fn semantic_analysis(ast: &parser::Program, symbol_table: &mut SymbolTable) 
     type_checked_ast
 }
 
-// Exported functions
 pub fn get_type(expr: &parser::Expr) -> Type {
     match expr {
         parser::Expr::FunctionCall(_, _, Some(ty))

@@ -6,4 +6,4 @@ main
 Cargo.lock
 build/
 target/
-tests/
+tests_ns/

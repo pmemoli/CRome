@@ -180,7 +180,8 @@ pub fn lexical_analysis(content: &str) -> VecDeque<Token> {
             | Token::LongConstant(_)
             | Token::UConstant(_)
             | Token::ULongConstant(_)
-            | Token::DFloatConstant(_) => max_match.0.len() - 1,
+            | Token::DFloatConstant(_)
+            | Token::SFloatConstant(_) => max_match.0.len() - 1,
             _ => max_match.0.len(),
         };
         i += advance;

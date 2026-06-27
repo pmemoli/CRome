@@ -2,7 +2,7 @@ use super::*;
 
 use crate::{
     parser::{BinaryOperator, UnaryOperator},
-    symbol::{InitialValue, StaticInit, SymbolMetadata, Type},
+    symbol::{InitialValue, StaticInit, SymbolMetadata},
 };
 
 // Third pass (Type Checking):
@@ -145,7 +145,8 @@ pub fn static_convert_constant_expr(expr: &parser::Expr, ty: &Type) -> parser::E
         parser::Const::ConstLong(i) => ConstVal::Integer(*i as i128),
         parser::Const::ConstUInt(u) => ConstVal::Integer(*u as i128),
         parser::Const::ConstULong(u) => ConstVal::Integer(*u as i128),
-        parser::Const::ConstDouble(f) => ConstVal::Float(*f),
+        parser::Const::ConstDouble(f) => ConstVal::Float(*f as f64),
+        parser::Const::ConstFloat(f) => ConstVal::Float(*f as f64),
     };
 
     // Rust preserves C standards for integer conversions
@@ -168,7 +169,11 @@ pub fn static_convert_constant_expr(expr: &parser::Expr, ty: &Type) -> parser::E
         }),
         Type::Double => parser::Const::ConstDouble(match val {
             ConstVal::Integer(i) => i as f64,
-            ConstVal::Float(f) => f,
+            ConstVal::Float(f) => f as f64,
+        }),
+        Type::Float => parser::Const::ConstFloat(match val {
+            ConstVal::Integer(i) => i as f32,
+            ConstVal::Float(f) => f as f32,
         }),
         _ => panic!("Unsupported type for static variable initialization"),
     };
@@ -183,6 +188,7 @@ pub fn constant_to_static_init(cons: &parser::Const) -> StaticInit {
         parser::Const::ConstUInt(u) => StaticInit::UIntInit(*u),
         parser::Const::ConstULong(u) => StaticInit::ULongInit(*u),
         parser::Const::ConstDouble(f) => StaticInit::DoubleInit(*f),
+        parser::Const::ConstFloat(f) => StaticInit::FloatInit(*f),
     }
 }
 
@@ -489,10 +495,9 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
         parser::Expr::Unary(op, inner, _) => {
             let typed_inner = typecheck_expr(inner.as_ref(), symbol_table);
 
-            if matches!(op, UnaryOperator::Complement)
-                && matches!(get_type(&typed_inner), Type::Double)
+            if matches!(op, UnaryOperator::Complement) && get_type(&typed_inner).is_floating_point()
             {
-                panic!("Can't take the bitwise complement of a double");
+                panic!("Can't take the bitwise complement of a float");
             }
 
             let new_expr = parser::Expr::Unary(op.clone(), Box::new(typed_inner.clone()), None);
@@ -509,8 +514,8 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
 
             let common_ty = get_common_type(&typed_left, &typed_right);
 
-            if matches!(op, BinaryOperator::Remainder) && matches!(common_ty, Type::Double) {
-                panic!("Can't take the remainder of a double");
+            if matches!(op, BinaryOperator::Remainder) && common_ty.is_floating_point() {
+                panic!("Can't take the remainder of a float");
             }
 
             match op {
@@ -573,6 +578,7 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
             parser::Const::ConstUInt(_) => set_type(expr, Type::UInt),
             parser::Const::ConstLong(_) => set_type(expr, Type::Long),
             parser::Const::ConstULong(_) => set_type(expr, Type::ULong),
+            parser::Const::ConstFloat(_) => set_type(expr, Type::Float),
             parser::Const::ConstDouble(_) => set_type(expr, Type::Double),
         },
         parser::Expr::Cast(ty, inner, _) => {
@@ -607,6 +613,9 @@ pub fn get_common_type(left: &parser::Expr, right: &parser::Expr) -> Type {
 
     if matches!(left_ty, Type::Double) | matches!(right_ty, Type::Double) {
         return Type::Double;
+    }
+    if matches!(left_ty, Type::Float) | matches!(right_ty, Type::Float) {
+        return Type::Float;
     }
 
     // Implements C standards for common type coercion

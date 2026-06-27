@@ -4,13 +4,22 @@ use std::fs;
 use std::process::Command;
 use tempfile::{Builder, NamedTempFile};
 
-mod codegen;
-mod emission;
-mod lexer;
-mod parser;
-mod semantic;
-mod symbol;
-mod tacky;
+#[cfg(feature = "codegen")]
+use crome::codegen;
+#[cfg(feature = "emission")]
+use crome::emission;
+#[cfg(feature = "lex")]
+use crome::lexer;
+#[cfg(feature = "parser")]
+use crome::parser;
+#[cfg(feature = "validate")]
+use crome::semantic;
+#[cfg(feature = "validate")]
+use crome::symbol;
+#[cfg(feature = "tacky")]
+use crome::tacky;
+#[cfg(feature = "parser")]
+use crome::types;
 
 #[derive(Parser)]
 #[command(name = "crab")]
@@ -66,75 +75,84 @@ fn main() -> Result<()> {
     }
 
     // Runs compiler
-    let mut symbol_table = symbol::SymbolTable::new();
-
     let content = fs::read_to_string(preprocessor_file_path)?;
 
+    #[cfg(feature = "validate")]
+    let mut symbol_table = symbol::SymbolTable::new();
+
+    #[cfg(feature = "lex")]
     let mut tokens = lexer::lexical_analysis(&content);
 
     if args.lex {
         return Ok(());
     }
 
+    #[cfg(feature = "parser")]
     let ast = parser::parse_program(&mut tokens);
 
     if args.parse {
         return Ok(());
     }
 
+    #[cfg(feature = "validate")]
     let resolved_ast = semantic::semantic_analysis(&ast, &mut symbol_table);
 
     if args.validate {
         return Ok(());
     }
 
+    #[cfg(feature = "tacky")]
     let tacky_ast = tacky::ast_program_to_tacky(&resolved_ast, &mut symbol_table);
 
     if args.tacky {
         return Ok(());
     }
 
+    #[cfg(feature = "codegen")]
     let asm_ast = codegen::codegen_program(&tacky_ast, &mut symbol_table);
 
     if args.codegen {
         return Ok(());
     }
 
-    let asm_str = emission::emission_program(&asm_ast, &symbol_table);
+    #[cfg(feature = "emission")]
+    {
+        let asm_str = emission::emission_program(&asm_ast, &symbol_table);
 
-    // Runs assembler and linker
-    let assembly_file = Builder::new().suffix(".s").tempfile()?;
-    let assembly_file_path = assembly_file.path();
-    fs::write(assembly_file_path, asm_str.clone())?;
+        // Runs assembler and linker
+        let assembly_file = Builder::new().suffix(".s").tempfile()?;
+        let assembly_file_path = assembly_file.path();
+        fs::write(assembly_file_path, asm_str.clone())?;
 
-    let stem = source_file.strip_suffix(".c").unwrap_or(source_file);
-    let output_file = if args.c {
-        format!("{}.o", stem)
-    } else {
-        stem.to_string()
-    };
+        let stem = source_file.strip_suffix(".c").unwrap_or(source_file);
+        let output_file = if args.c {
+            format!("{}.o", stem)
+        } else {
+            stem.to_string()
+        };
 
-    let mut gcc_command = Command::new("gcc");
+        let mut gcc_command = Command::new("gcc");
 
-    if args.c {
-        gcc_command.arg("-c"); // do not link, only generate object file
-    }
+        if args.c {
+            gcc_command.arg("-c"); // do not link, only generate object file
+        }
 
-    if args.g {
-        let debug_assembly_file = format!("{}.s", stem);
-        fs::write(debug_assembly_file, asm_str.clone())?;
-        gcc_command.arg("-g"); // generate debug information
-    }
+        if args.g {
+            let debug_assembly_file = format!("{}.s", stem);
+            fs::write(debug_assembly_file, asm_str.clone())?;
+            gcc_command.arg("-g"); // generate debug information
+        }
 
-    let status = gcc_command
-        .arg(assembly_file_path)
-        .arg("-o")
-        .arg(&output_file)
-        .args(args.l.iter().map(|lib| format!("-l{}", lib)))
-        .status()?;
+        let status = gcc_command
+            .arg(assembly_file_path)
+            .arg("-o")
+            .arg(&output_file)
+            .args(args.l.iter().map(|lib| format!("-l{}", lib)))
+            .status()?;
 
-    if !status.success() {
-        bail!("Object generation and linking failed at runtime.");
+        if !status.success() {
+            bail!("Object generation and linking failed at runtime.");
+        }
     }
 
     Ok(())

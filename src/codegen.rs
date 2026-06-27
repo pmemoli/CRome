@@ -24,10 +24,10 @@ pub enum TopLevel {
 // instruction = Mov(assembly_type, operand src, operand dst)
 //     | Movsx(operand src, operand dst)
 //     | MovZeroExtend(operand src, operand dst)
-//     | Cvttsd2si(assembly_type dst_type, operand src, operand dst)
-//     | Cvtsi2sd(assembly_type src_type, operand src, operand dst)
-//     | Vcvttsd2usi(assembly_type dst_type, operand src, operand dst)
-//     | Vcvtusi2sd(assembly_type dst_type, operand src, operand dst)
+//     | FloatToInt(assembly_type dst_type, operand src, operand dst)
+//     | FloatToUInt(assembly_type src_type, operand src, operand dst)
+//     | IntToFloat(assembly_type src_type, operand src, operand dst)
+//     | UIntToFloat(assembly_type src_type, operand src, operand dst)
 //     | Unary(unary_operator, assembly_type, operand)
 //     | Binary(binary_operator, assembly_type, operand, operand)
 //     | Cmp(assembly_type, operand, operand)
@@ -46,10 +46,10 @@ pub enum Instruction {
     Mov(AssemblyType, Operand, Operand),
     Movsx(Operand, Operand),
     MovZeroExtend(Operand, Operand),
-    Cvttsd2si(AssemblyType, Operand, Operand), // Double to Int/Long
-    Cvtsi2sd(AssemblyType, Operand, Operand),  // Int/Long to Double
-    Vcvttsd2usi(AssemblyType, Operand, Operand), // Double to Unsigned Int/Long
-    Vcvtusi2sd(AssemblyType, Operand, Operand), // Unsigned Int/Long to Double
+    FloatToInt(AssemblyType, Operand, Operand),
+    FloatToUInt(AssemblyType, Operand, Operand),
+    IntToFloat(AssemblyType, Operand, Operand),
+    UIntToFloat(AssemblyType, Operand, Operand),
     Unary(UnaryOperator, AssemblyType, Operand),
     Binary(BinaryOperator, AssemblyType, Operand, Operand),
     Cmp(AssemblyType, Operand, Operand),
@@ -155,10 +155,10 @@ pub enum Reg {
 // ASM codegen wrapper
 pub fn codegen_program(program: &tacky::Program, symbol_table: &mut SymbolTable) -> Program {
     let asm_program = tacky_to_asm::tacky_program_to_asm(program, symbol_table);
-    let backend_symbol_table = BackendSymbolTable::new(symbol_table.clone());
-    let asm_program =
-        register_allocation::resolve_pseudo_registers_program(&asm_program, &backend_symbol_table);
-    let asm_program = instruction_fixup::instruction_fixup_program(&asm_program);
+    // let backend_symbol_table = BackendSymbolTable::new(symbol_table.clone());
+    // let asm_program =
+    //     register_allocation::resolve_pseudo_registers_program(&asm_program, &backend_symbol_table);
+    // let asm_program = instruction_fixup::instruction_fixup_program(&asm_program);
 
     asm_program
 }

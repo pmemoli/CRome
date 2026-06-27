@@ -1,6 +1,7 @@
 use crate::parser;
 use crate::semantic::get_type;
-use crate::symbol::{InitialValue, StaticInit, SymbolMetadata, SymbolTable, Type};
+use crate::symbol::{InitialValue, StaticInit, SymbolMetadata, SymbolTable};
+use crate::types::Type;
 
 // program = Program(top_level*)
 #[derive(Debug)]
@@ -18,10 +19,10 @@ pub enum TopLevel {
 //     | SignExtend(val src, val dst)
 //     | Truncate(val src, val dst)
 //     | ZeroExtend(val src, val dst)
-//     | DoubleToInt(val src, val dst)
-//     | DoubleToUInt(val src, val dst)
-//     | IntToDouble(val src, val dst)
-//     | UIntToDouble(val src, val dst)
+//     | FloatToInt(val src, val dst)
+//     | FloatToUInt(val src, val dst)
+//     | IntToFloat(val src, val dst)
+//     | UIntToFloat(val src, val dst)
 //     | Unary(unary_operator, val src, val dst)
 //     | Binary(binary_operator, val src1, val src2, val dst)
 //     | Copy(val src, val dst)
@@ -35,10 +36,10 @@ pub enum Instruction {
     Return(Val),
     SignExtend(Val, Val),
     ZeroExtend(Val, Val),
-    DoubleToInt(Val, Val),
-    DoubleToUInt(Val, Val),
-    IntToDouble(Val, Val),
-    UIntToDouble(Val, Val),
+    FloatToInt(Val, Val),
+    FloatToUInt(Val, Val),
+    IntToFloat(Val, Val),
+    UIntToFloat(Val, Val),
     Truncate(Val, Val),
     Unary(UnaryOperator, Val, Val),
     Binary(BinaryOperator, Val, Val, Val),
@@ -131,6 +132,7 @@ pub fn convert_symbols_to_tacky(symbol_table: &mut SymbolTable) -> Vec<TopLevel>
                         Type::Long => StaticInit::LongInit(0),
                         Type::ULong => StaticInit::ULongInit(0),
                         Type::Double => StaticInit::DoubleInit(0.),
+                        Type::Float => StaticInit::FloatInit(0.),
                         Type::FunType(_, _) => {
                             panic!("Function type cannot be used for static variable: {}", name)
                         }
@@ -544,17 +546,17 @@ pub fn ast_expression_to_tacky(
 
             match (t, inner_type) {
                 // double (float) conversion
-                (Type::Int | Type::Long, Type::Double) => {
-                    instructions.push(Instruction::DoubleToInt(result.clone(), dst.clone()))
+                (Type::Int | Type::Long, Type::Double | Type::Float) => {
+                    instructions.push(Instruction::FloatToInt(result.clone(), dst.clone()))
                 }
-                (Type::UInt | Type::ULong, Type::Double) => {
-                    instructions.push(Instruction::DoubleToUInt(result.clone(), dst.clone()))
+                (Type::UInt | Type::ULong, Type::Double | Type::Float) => {
+                    instructions.push(Instruction::FloatToUInt(result.clone(), dst.clone()))
                 }
-                (Type::Double, Type::Int | Type::Long) => {
-                    instructions.push(Instruction::IntToDouble(result.clone(), dst.clone()))
+                (Type::Double | Type::Float, Type::Int | Type::Long) => {
+                    instructions.push(Instruction::IntToFloat(result.clone(), dst.clone()))
                 }
-                (Type::Double, Type::UInt | Type::ULong) => {
-                    instructions.push(Instruction::UIntToDouble(result.clone(), dst.clone()))
+                (Type::Double | Type::Float, Type::UInt | Type::ULong) => {
+                    instructions.push(Instruction::UIntToFloat(result.clone(), dst.clone()))
                 }
                 // integer conversion
                 _ => {

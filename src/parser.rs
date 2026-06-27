@@ -1,7 +1,7 @@
 use ordered_float::OrderedFloat;
 
 use crate::lexer::Token;
-use crate::symbol::Type;
+use crate::types::Type;
 use std::{
     collections::{HashMap, VecDeque},
     panic,
@@ -217,6 +217,7 @@ impl Token {
                 | Token::UConstant(_)
                 | Token::ULongConstant(_)
                 | Token::DFloatConstant(_)
+                | Token::SFloatConstant(_)
         )
     }
 
@@ -227,6 +228,7 @@ impl Token {
                 | Token::LongKeyword
                 | Token::UnsignedKeyword
                 | Token::SignedKeyword
+                | Token::FloatKeyword
                 | Token::DoubleKeyword
         )
     }
@@ -393,6 +395,9 @@ pub fn parse_type_from_specifiers(specifier_tokens: &mut Vec<Token>) -> Type {
     // Doubles can't be combined with other types
     if specifier_tokens == &vec![Token::DoubleKeyword] {
         return Type::Double;
+    }
+    if specifier_tokens == &vec![Token::FloatKeyword] {
+        return Type::Float;
     }
     if specifier_tokens.contains(&Token::DoubleKeyword) {
         panic!("Syntax Error: Can't combine 'double' with other type specifiers")
@@ -686,6 +691,11 @@ pub fn parse_constant(tokens: &mut VecDeque<Token>) -> Const {
         }
         Token::DFloatConstant(OrderedFloat(f)) => {
             let cons = Const::ConstDouble(*f);
+            take_token(tokens);
+            cons
+        }
+        Token::SFloatConstant(OrderedFloat(f)) => {
+            let cons = Const::ConstFloat(*f);
             take_token(tokens);
             cons
         }

@@ -10,6 +10,7 @@ pub struct BackendSymbolTable {
 pub enum AssemblyType {
     Longword,
     Quadword,
+    Float,
     Double,
 }
 
@@ -17,6 +18,7 @@ impl AssemblyType {
     pub fn size(&self) -> usize {
         match self {
             Self::Longword => 4,
+            Self::Float => 4,
             Self::Quadword => 8,
             Self::Double => 8,
         }
@@ -24,6 +26,7 @@ impl AssemblyType {
     pub fn alignment(&self) -> usize {
         match self {
             Self::Longword => 4,
+            Self::Float => 4,
             Self::Quadword => 8,
             Self::Double => 8,
         }
@@ -53,6 +56,7 @@ impl BackendSymbolTable {
                         Type::Long => AssemblyType::Quadword,
                         Type::ULong => AssemblyType::Quadword,
                         Type::Double => AssemblyType::Double,
+                        Type::Float => AssemblyType::Float,
                         Type::FunType(_, _) => panic!("Functions should not be treated as objects"),
                     };
 

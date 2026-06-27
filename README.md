@@ -6,11 +6,11 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS).
 
 After implementing the book's subset of C, the language will be extended with more optimizations and features as they are required for RomeOS.
 
-Currently in chapter 14 / 20, finished part 1.
+Currently in chapter 14 / 20 and adding remaining integer types, finished part 1.
 
 TODO:
 
-- Floats
+- Floats codegen
 - NaN
 - Refactor instruction fixup, its horrendous
 
@@ -71,7 +71,7 @@ Loop related statements are annotated in the semantic analysis pass.
 <function-declaration> ::= { <specifier> }+ <identifier> "(" <param-list> ")" ( <block> | ";")
 <param-list> ::= "void"
     | { <type-specifier> }+ <identifier> { "," { <type-specifier> }+ <identifier> }
-<type-specifier> ::= "int" | "long" | "unsigned" | "signed" | "double"
+<type-specifier> ::= "int" | "long" | "unsigned" | "signed" | "double" | "float"
 <specifier> ::= <type-specifier> | "static" | "extern"
 <block> ::= "{" { <block-item> } "}"
 <block-item> ::= <statement> | <declaration>
@@ -95,7 +95,7 @@ Loop related statements are annotated in the semantic analysis pass.
 <unop> ::= "-" | "~" | "!"
 <binop> ::= "-" | "+" | "*" | "/" | "%" | "&&" | "||"
     | "==" | "!=" | "<" | "<=" | ">" | ">=" | "="
-<const> ::= <int> | <long> | <uint> | <ulong> | <double>
+<const> ::= <int> | <long> | <uint> | <ulong> | <float> | <double>
 <identifier> ::= ? An identifier token ?
 <int> ::= ? An int token ?
 <long> ::= ? An int or long token ?
@@ -165,15 +165,15 @@ Check that identifier declarations do not contradict in having or not having lin
 program = Program(top_level*)
 top_level = Function(identifier, bool global, identifier* params, instruction* body)
     | StaticVariable(identifier, bool global, type t, static_init init)
-static_init = IntInit(int) | LongInit(int) | UIntInit(int) | ULongInit(int) | DoubleInit(double)
+static_init = IntInit(int) | LongInit(int) | UIntInit(int) | ULongInit(int) | DoubleInit(double) | FloatInit(float)
 instruction = Return(val)
     | SignExtend(val src, val dst)
     | Truncate(val src, val dst)
     | ZeroExtend(val src, val dst)
-    | DoubleToInt(val src, val dst)
-    | DoubleToUInt(val src, val dst)
-    | IntToDouble(val src, val dst)
-    | UIntToDouble(val src, val dst)
+    | FloatToInt(val src, val dst)
+    | FloatToUInt(val src, val dst)
+    | IntToFloat(val src, val dst)
+    | UIntToFloat(val src, val dst)
     | Unary(unary_operator, val src, val dst)
     | Binary(binary_operator, val src1, val src2, val dst)
     | Copy(val src, val dst)
@@ -198,8 +198,10 @@ top_level = Function(identifier name, bool global, instruction* instructions)
 instruction = Mov(assembly_type, operand src, operand dst)
     | Movsx(operand src, operand dst)
     | MovZeroExtend(operand src, operand dst)
-    | Cvttsd2si(assembly_type dst_type, operand src, operand dst)
-    | Cvtsi2sd(assembly_type src_type, operand src, operand dst)
+    | FloatToInt(assembly_type dst_type, operand src, operand dst)
+    | FloatToUInt(assembly_type src_type, operand src, operand dst)
+    | IntToFloat(assembly_type src_type, operand src, operand dst)
+    | UIntToFloat(assembly_type src_type, operand src, operand dst)
     | Unary(unary_operator, assembly_type, operand)
     | Binary(binary_operator, assembly_type, operand, operand)
     | Cmp(assembly_type, operand, operand)
