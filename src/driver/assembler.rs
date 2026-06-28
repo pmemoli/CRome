@@ -10,7 +10,9 @@ pub fn assembler(content: &str, debug: bool) -> Result<String> {
     let output_file = NamedTempFile::new()?;
     let output_file_path = output_file.path();
 
-    let mut assembler_command = Command::new("as")
+    let mut assembler_command = Command::new("as");
+
+    assembler_command
         .arg(assembler_file_path)
         .arg("-o")
         .arg(output_file_path);
