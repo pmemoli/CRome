@@ -130,25 +130,25 @@ pub fn resolve_pseudo_registers_instruction(
             let resolved_op_2 = resolve_pseudo_registers_operand(op_2, symbol_table, local_stack);
             Instruction::MovZeroExtend(resolved_op_1, resolved_op_2)
         }
-        Instruction::Cvttsd2si(ty, src, dst) => {
+        Instruction::FloatToInt(ty, src, dst) => {
             let resolved_src = resolve_pseudo_registers_operand(src, symbol_table, local_stack);
             let resolved_dst = resolve_pseudo_registers_operand(dst, symbol_table, local_stack);
-            Instruction::Cvttsd2si(ty.clone(), resolved_src, resolved_dst)
+            Instruction::FloatToInt(ty.clone(), resolved_src, resolved_dst)
         }
-        Instruction::Cvtsi2sd(ty, src, dst) => {
+        Instruction::IntToFloat(ty, src, dst) => {
             let resolved_src = resolve_pseudo_registers_operand(src, symbol_table, local_stack);
             let resolved_dst = resolve_pseudo_registers_operand(dst, symbol_table, local_stack);
-            Instruction::Cvtsi2sd(ty.clone(), resolved_src, resolved_dst)
+            Instruction::IntToFloat(ty.clone(), resolved_src, resolved_dst)
         }
-        Instruction::Vcvttsd2usi(ty, src, dst) => {
+        Instruction::FloatToUInt(ty, src, dst) => {
             let resolved_src = resolve_pseudo_registers_operand(src, symbol_table, local_stack);
             let resolved_dst = resolve_pseudo_registers_operand(dst, symbol_table, local_stack);
-            Instruction::Vcvttsd2usi(ty.clone(), resolved_src, resolved_dst)
+            Instruction::FloatToUInt(ty.clone(), resolved_src, resolved_dst)
         }
-        Instruction::Vcvtusi2sd(ty, src, dst) => {
+        Instruction::UIntToFloat(ty, src, dst) => {
             let resolved_src = resolve_pseudo_registers_operand(src, symbol_table, local_stack);
             let resolved_dst = resolve_pseudo_registers_operand(dst, symbol_table, local_stack);
-            Instruction::Vcvtusi2sd(ty.clone(), resolved_src, resolved_dst)
+            Instruction::UIntToFloat(ty.clone(), resolved_src, resolved_dst)
         }
         i => i.clone(),
     }

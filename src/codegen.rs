@@ -155,10 +155,10 @@ pub enum Reg {
 // ASM codegen wrapper
 pub fn codegen_program(program: &tacky::Program, symbol_table: &mut SymbolTable) -> Program {
     let asm_program = tacky_to_asm::tacky_program_to_asm(program, symbol_table);
-    // let backend_symbol_table = BackendSymbolTable::new(symbol_table.clone());
-    // let asm_program =
-    //     register_allocation::resolve_pseudo_registers_program(&asm_program, &backend_symbol_table);
-    // let asm_program = instruction_fixup::instruction_fixup_program(&asm_program);
+    let backend_symbol_table = BackendSymbolTable::new(symbol_table.clone());
+    let asm_program =
+        register_allocation::resolve_pseudo_registers_program(&asm_program, &backend_symbol_table);
+    let asm_program = instruction_fixup::instruction_fixup_program(&asm_program);
 
     asm_program
 }

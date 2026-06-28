@@ -22,22 +22,23 @@ impl StaticConstants {
         }
     }
 
-    pub fn get_by_value(&self, value: f64, alignment: usize) -> Option<&String> {
-        self.map.iter().find_map(|(name, data)| {
-            if let StaticInit::DoubleInit(existing_f) = &data.init {
-                if existing_f.to_bits() == value.to_bits() && data.alignment == alignment {
-                    return Some(name);
-                }
+    pub fn get_by_value(&self, alignment: usize, init: &StaticInit) -> Option<&String> {
+        for (name, data) in &self.map {
+            if data.alignment == alignment && &data.init == init {
+                return Some(name);
             }
-            None
-        })
+        }
+        None
     }
 
-    pub fn insert(&mut self, name: String, alignment: usize, value: f64) {
-        let init = StaticInit::DoubleInit(value);
-
-        self.map
-            .insert(name, StaticConstantData { alignment, init });
+    pub fn insert(&mut self, name: String, alignment: usize, init: &StaticInit) {
+        self.map.insert(
+            name,
+            StaticConstantData {
+                alignment,
+                init: init.clone(),
+            },
+        );
     }
 }
 
@@ -236,8 +237,13 @@ pub fn tacky_instruction_to_asm(
                 }
                 (tacky::UnaryOperator::Negate, t) if t.is_floating_point() => {
                     // Xorpd needs this 16 byte aligned rather than just 8
-                    let zero_constant_name =
-                        create_float_constant(-0.0, 16, symbol_table, static_constant_names);
+                    let zero_constant_name = create_float_constant(
+                        -0.0,
+                        Type::Double,
+                        16,
+                        symbol_table,
+                        static_constant_names,
+                    );
 
                     vec![
                         Instruction::Mov(AssemblyType::Double, src_asm_op, dst_asm_op.clone()),
@@ -642,7 +648,18 @@ pub fn tacky_val_to_asm_operand(
             Const::ConstDouble(f) => {
                 let const_name = create_float_constant(
                     *f,
-                    AssemblyType::Double.alignment(),
+                    Type::Double,
+                    Type::Double.byte_size(),
+                    symbol_table,
+                    static_constant_names,
+                );
+                Operand::Data(const_name)
+            }
+            Const::ConstFloat(f) => {
+                let const_name = create_float_constant(
+                    *f as f64,
+                    Type::Float,
+                    Type::Float.byte_size(),
                     symbol_table,
                     static_constant_names,
                 );
@@ -655,17 +672,24 @@ pub fn tacky_val_to_asm_operand(
 
 pub fn create_float_constant(
     f: f64,
+    ty: Type,
     alignment: usize,
     symbol_table: &mut SymbolTable,
     static_constant_names: &mut StaticConstants,
 ) -> String {
-    let existing_const = static_constant_names.get_by_value(f, alignment);
+    let init = match ty {
+        Type::Double => StaticInit::DoubleInit(f),
+        Type::Float => StaticInit::FloatInit(f as f32),
+        _ => panic!("Unsupported type for float constant"),
+    };
+
+    let existing_const = static_constant_names.get_by_value(alignment, &init);
 
     if let Some(existing_const_name) = existing_const {
         existing_const_name.clone()
     } else {
         let const_name = symbol_table.unique_var_name();
-        static_constant_names.insert(const_name.clone(), alignment, f);
+        static_constant_names.insert(const_name.clone(), alignment, &init);
         const_name
     }
 }
@@ -718,6 +742,7 @@ pub fn tacky_value_type_asm(tacky_val: &tacky::Val, symbol_table: &SymbolTable) 
             Const::ConstLong(_) => AssemblyType::Quadword,
             Const::ConstULong(_) => AssemblyType::Quadword,
             Const::ConstDouble(_) => AssemblyType::Double,
+            Const::ConstFloat(_) => AssemblyType::Float,
         },
     }
 }
@@ -729,6 +754,7 @@ pub fn symbol_type_to_asm_type(tacky_type: &Type) -> AssemblyType {
         Type::Long => AssemblyType::Quadword,
         Type::ULong => AssemblyType::Quadword,
         Type::Double => AssemblyType::Double,
+        Type::Float => AssemblyType::Float,
         _ => panic!("Unsupported type for assembly codegen"),
     }
 }
@@ -748,6 +774,7 @@ pub fn tacky_value_type(tacky_val: &tacky::Val, symbol_table: &SymbolTable) -> T
             Const::ConstLong(_) => Type::Long,
             Const::ConstULong(_) => Type::ULong,
             Const::ConstDouble(_) => Type::Double,
+            Const::ConstFloat(_) => Type::Float,
         },
     }
 }

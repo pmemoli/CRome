@@ -1,4 +1,5 @@
 use super::*;
+use ordered_float::OrderedFloat;
 
 // Frontend Symbol Table
 #[derive(Debug, Clone)]
@@ -33,7 +34,7 @@ pub enum InitialValue {
 }
 
 // static_init = IntInit(int) | LongInit(int) | UIntInit(int) | ULongInit(int) | DoubleInit(double) | FloatInit(float)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum StaticInit {
     IntInit(i32),
     UIntInit(u32),

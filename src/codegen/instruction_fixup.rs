@@ -175,7 +175,7 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
         }
 
         // Signed integer to double need to have dst as a register, and src can't be const
-        Instruction::Cvtsi2sd(ty, src, dst)
+        Instruction::IntToFloat(ty, src, dst)
             if !dst.is_register_operand() || matches!(src, Operand::Imm(_)) =>
         {
             let mut out = Vec::new();
@@ -189,10 +189,10 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
             };
 
             if dst.is_register_operand() {
-                out.push(Instruction::Cvtsi2sd(ty.clone(), src, dst.clone()));
+                out.push(Instruction::IntToFloat(ty.clone(), src, dst.clone()));
             } else {
                 let dst_reg = dst_register(&AssemblyType::Double);
-                out.push(Instruction::Cvtsi2sd(ty.clone(), src, dst_reg.clone()));
+                out.push(Instruction::IntToFloat(ty.clone(), src, dst_reg.clone()));
                 out.push(Instruction::Mov(AssemblyType::Double, dst_reg, dst.clone()));
             }
 
@@ -200,7 +200,7 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
         }
 
         // Unsigned integer to double need to have dst as a register, and src can't be const
-        Instruction::Vcvtusi2sd(ty, src, dst)
+        Instruction::UIntToFloat(ty, src, dst)
             if !dst.is_register_operand() || matches!(src, Operand::Imm(_)) =>
         {
             let mut out = Vec::new();
@@ -214,10 +214,10 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
             };
 
             if dst.is_register_operand() {
-                out.push(Instruction::Vcvtusi2sd(ty.clone(), src, dst.clone()));
+                out.push(Instruction::UIntToFloat(ty.clone(), src, dst.clone()));
             } else {
                 let dst_reg = dst_register(&AssemblyType::Double);
-                out.push(Instruction::Vcvtusi2sd(ty.clone(), src, dst_reg.clone()));
+                out.push(Instruction::UIntToFloat(ty.clone(), src, dst_reg.clone()));
                 out.push(Instruction::Mov(AssemblyType::Double, dst_reg, dst.clone()));
             }
 
@@ -225,19 +225,19 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
         }
 
         // Double to signed integer need to have dst as a register
-        Instruction::Cvttsd2si(ty, src, dst) if !dst.is_register_operand() => {
+        Instruction::FloatToInt(ty, src, dst) if !dst.is_register_operand() => {
             let dst_reg = dst_register(ty);
             vec![
-                Instruction::Cvttsd2si(ty.clone(), src.clone(), dst_reg.clone()),
+                Instruction::FloatToInt(ty.clone(), src.clone(), dst_reg.clone()),
                 Instruction::Mov(ty.clone(), dst_reg, dst.clone()),
             ]
         }
 
         // Double to unsigned integer need to have dst as a register
-        Instruction::Vcvttsd2usi(ty, src, dst) if !dst.is_register_operand() => {
+        Instruction::FloatToUInt(ty, src, dst) if !dst.is_register_operand() => {
             let dst_reg = dst_register(ty);
             vec![
-                Instruction::Vcvttsd2usi(ty.clone(), src.clone(), dst_reg.clone()),
+                Instruction::FloatToUInt(ty.clone(), src.clone(), dst_reg.clone()),
                 Instruction::Mov(ty.clone(), dst_reg, dst.clone()),
             ]
         }
@@ -299,14 +299,14 @@ pub fn instruction_fixup_large_imm(instruction: &Instruction) -> Vec<Instruction
 
 pub fn src_register(ty: &AssemblyType) -> Operand {
     match ty {
-        AssemblyType::Double => Operand::Reg(Reg::XMM14),
+        AssemblyType::Double | AssemblyType::Float => Operand::Reg(Reg::XMM14),
         _ => Operand::Reg(Reg::R10),
     }
 }
 
 pub fn dst_register(ty: &AssemblyType) -> Operand {
     match ty {
-        AssemblyType::Double => Operand::Reg(Reg::XMM15),
+        AssemblyType::Double | AssemblyType::Float => Operand::Reg(Reg::XMM15),
         _ => Operand::Reg(Reg::R11),
     }
 }

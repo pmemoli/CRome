@@ -14,3 +14,5 @@ pub mod symbol;
 pub mod tacky;
 #[cfg(feature = "parser")]
 pub mod types;
+
+pub mod driver;

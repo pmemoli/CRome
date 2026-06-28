@@ -598,6 +598,6 @@ pub fn ast_binop_to_tacky(ast_binop: &parser::BinaryOperator) -> BinaryOperator 
         parser::BinaryOperator::LessThanOrEqual => BinaryOperator::LessOrEqual,
         parser::BinaryOperator::GreaterThan => BinaryOperator::GreaterThan,
         parser::BinaryOperator::GreaterThanOrEqual => BinaryOperator::GreaterOrEqual,
-        _ => panic!("Unsupported binary operator: {:?}", ast_binop), // Missing AND and OR
+        _ => panic!("Unsupported binary operator: {:?}", ast_binop),
     }
 }

@@ -1,6 +1,8 @@
 # CRome
 
-C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". The project is just the preprocessed C to ASM compiler. Preprocessor and Linker comes from gcc.
+C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". 
+
+The project is just the compiler, we use cpp as the preprocessor, as as the assembler and ld as the linker. 
 
 The final goal is writing and compiling a simple xv6-like OS (RomeOS).  
 
@@ -10,8 +12,13 @@ Currently in chapter 14 / 20 and adding remaining integer types, finished part 1
 
 TODO:
 
-- Floats codegen
-- NaN
+- Pass C1-13 NS tests to the integration test suite
+- Refactor the driver to be more modular
+- Floats emission
+- Thorough float tests based on NS double examples
+
+- NaNs
+
 - Refactor instruction fixup, its horrendous
 
 - Chapter 14
@@ -19,7 +26,6 @@ TODO:
 Backlog:
 
 - Proper error reporting system, currently just panics with a message and a backtrace.
-- Cuter error messages, its very inconsistent right now.
 
 ## Lexer
 

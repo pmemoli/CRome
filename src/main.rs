@@ -4,6 +4,8 @@ use std::fs;
 use std::process::Command;
 use tempfile::{Builder, NamedTempFile};
 
+use crome::driver;
+
 #[cfg(feature = "codegen")]
 use crome::codegen;
 #[cfg(feature = "emission")]
