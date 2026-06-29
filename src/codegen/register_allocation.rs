@@ -130,6 +130,16 @@ pub fn resolve_pseudo_registers_instruction(
             let resolved_op_2 = resolve_pseudo_registers_operand(op_2, symbol_table, local_stack);
             Instruction::MovZeroExtend(resolved_op_1, resolved_op_2)
         }
+        Instruction::SFloatToDFloat(op_1, op_2) => {
+            let resolved_op_1 = resolve_pseudo_registers_operand(op_1, symbol_table, local_stack);
+            let resolved_op_2 = resolve_pseudo_registers_operand(op_2, symbol_table, local_stack);
+            Instruction::SFloatToDFloat(resolved_op_1, resolved_op_2)
+        }
+        Instruction::DFloatToSFloat(op_1, op_2) => {
+            let resolved_op_1 = resolve_pseudo_registers_operand(op_1, symbol_table, local_stack);
+            let resolved_op_2 = resolve_pseudo_registers_operand(op_2, symbol_table, local_stack);
+            Instruction::DFloatToSFloat(resolved_op_1, resolved_op_2)
+        }
         Instruction::FloatToInt(src_ty, dst_ty, src, dst) => {
             let resolved_src = resolve_pseudo_registers_operand(src, symbol_table, local_stack);
             let resolved_dst = resolve_pseudo_registers_operand(dst, symbol_table, local_stack);

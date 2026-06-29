@@ -8,16 +8,15 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS) with it.
 
 ## TODO
 
-Currently in chapter 14 / 20 and adding remaining integer types, finished part 1.
+Currently in chapter 14 / 20 and adding the 32 bit float type, finished part 1.
 
 - Test suite:
-    - Wire everything up properly
     - Pass C1-13 NS tests to the integration test suite
     - Thorough float tests based on NS double examples
 
-- NaNs
-
 - Refactor instruction fixup, its horrendous
+
+- NaNs
 
 - Chapter 14
 
@@ -174,6 +173,8 @@ instruction = Return(val)
     | SignExtend(val src, val dst)
     | Truncate(val src, val dst)
     | ZeroExtend(val src, val dst)
+    | SFloatToDFloat(val src, val dst)
+    | DFloatToSFloat(val src, val dst)
     | FloatToInt(val src, val dst)
     | FloatToUInt(val src, val dst)
     | IntToFloat(val src, val dst)
@@ -202,6 +203,8 @@ top_level = Function(identifier name, bool global, instruction* instructions)
 instruction = Mov(assembly_type, operand src, operand dst)
     | Movsx(operand src, operand dst)
     | MovZeroExtend(operand src, operand dst)
+    | SFloatToDFloat(operand src, operand dst)
+    | DFloatToSFloat(operand src, operand dst)
     | FloatToInt(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
     | FloatToUInt(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
     | IntToFloat(assembly_type src_type, assembly_type dst_type, operand src, operand dst)

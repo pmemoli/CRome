@@ -478,6 +478,18 @@ pub fn tacky_instruction_to_asm(
                 asm_dst,
             )]
         }
+        tacky::Instruction::SFloatToDFloat(src, dst) => {
+            let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+            let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
+
+            vec![Instruction::SFloatToDFloat(asm_src, asm_dst)]
+        }
+        tacky::Instruction::DFloatToSFloat(src, dst) => {
+            let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+            let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
+
+            vec![Instruction::DFloatToSFloat(asm_src, asm_dst)]
+        }
         tacky::Instruction::UIntToFloat(src, dst) => {
             let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
             let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
@@ -611,7 +623,7 @@ pub fn tacky_fun_call_to_asm(
             Operand::Pseudo(_) | Operand::Stack(_) | Operand::Data(_) => {
                 let asm_arg_type = tacky_value_type_asm(arg, symbol_table);
                 let mov_type = match asm_arg_type {
-                    AssemblyType::Longword => AssemblyType::Longword,
+                    AssemblyType::Longword | AssemblyType::Float => AssemblyType::Longword,
                     _ => AssemblyType::Quadword,
                 };
                 instructions.push(Instruction::Mov(mov_type, asm_arg, Operand::Reg(Reg::R10)));
@@ -639,7 +651,7 @@ pub fn tacky_fun_call_to_asm(
     let dst_asm_type = tacky_value_type_asm(dst, symbol_table);
 
     match dst_asm_type {
-        AssemblyType::Double => {
+        AssemblyType::Double | AssemblyType::Float => {
             instructions.push(Instruction::Mov(
                 dst_asm_type,
                 Operand::Reg(Reg::XMM0),

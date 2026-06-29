@@ -1,9 +1,7 @@
-use crome::driver;
-use std::fs;
+mod driver;
 
 #[test]
 #[cfg(feature = "parser")]
 fn test_parser_float_valid() {
-    let content = fs::read_to_string("./tests/source/float_valid.c").unwrap();
-    driver::compiler::compiler(&content).unwrap();
+    driver::parser("./tests/source/float_valid.c").unwrap();
 }

@@ -7,7 +7,8 @@ pub fn linker(content: &[u8], libs: Vec<&str>, output_file_path: &str) -> Result
     let linker_file_path = linker_file.path();
     std::fs::write(linker_file_path, content)?;
 
-    let status = Command::new("ld")
+    // Simplest way to use ld
+    let status = Command::new("gcc")
         .arg(linker_file_path)
         .arg("-o")
         .arg(output_file_path)

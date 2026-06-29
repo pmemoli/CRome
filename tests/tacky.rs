@@ -1,9 +1,7 @@
-use crome::driver;
-use std::fs;
+mod driver;
 
 #[test]
-#[cfg(all(feature = "tacky", not(feature = "codegen")))]
+#[cfg(feature = "tacky")]
 fn test_tacky_float_valid() {
-    let content = fs::read_to_string("./tests/source/float_valid.c").unwrap();
-    driver::compiler::compiler(&content).unwrap();
+    driver::tacky("./tests/source/float_valid.c").unwrap();
 }

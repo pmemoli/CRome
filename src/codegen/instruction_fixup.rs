@@ -174,6 +174,64 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
             ]
         }
 
+        // xmm1/m32 to xmm2
+        Instruction::SFloatToDFloat(src, dst)
+            if !dst.is_register_operand() || src.is_imm_operand() =>
+        {
+            let mut out = Vec::new();
+
+            let src = if src.is_imm_operand() {
+                let src_reg = src_register(&AssemblyType::Float);
+                out.push(Instruction::Mov(
+                    AssemblyType::Float,
+                    src.clone(),
+                    src_reg.clone(),
+                ));
+                src_reg
+            } else {
+                src.clone()
+            };
+
+            if dst.is_register_operand() {
+                out.push(Instruction::SFloatToDFloat(src, dst.clone()));
+            } else {
+                let dst_reg = dst_register(&AssemblyType::Double);
+                out.push(Instruction::SFloatToDFloat(src, dst_reg.clone()));
+                out.push(Instruction::Mov(AssemblyType::Double, dst_reg, dst.clone()));
+            }
+
+            out
+        }
+
+        // xmm1/m64 to xmm2
+        Instruction::DFloatToSFloat(src, dst)
+            if !dst.is_register_operand() || dst.is_imm_operand() =>
+        {
+            let mut out = Vec::new();
+
+            let src = if src.is_imm_operand() {
+                let src_reg = src_register(&AssemblyType::Double);
+                out.push(Instruction::Mov(
+                    AssemblyType::Double,
+                    src.clone(),
+                    src_reg.clone(),
+                ));
+                src_reg
+            } else {
+                src.clone()
+            };
+
+            if dst.is_register_operand() {
+                out.push(Instruction::DFloatToSFloat(src, dst.clone()));
+            } else {
+                let dst_reg = dst_register(&AssemblyType::Float);
+                out.push(Instruction::DFloatToSFloat(src, dst_reg.clone()));
+                out.push(Instruction::Mov(AssemblyType::Float, dst_reg, dst.clone()));
+            }
+
+            out
+        }
+
         // Signed integer to double need to have dst as a register, and src can't be const
         Instruction::IntToFloat(src_ty, dst_ty, src, dst)
             if !dst.is_register_operand() || matches!(src, Operand::Imm(_)) =>
@@ -182,17 +240,31 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
 
             let src = if matches!(src, Operand::Imm(_)) {
                 let src_reg = src_register(src_ty);
-                out.push(Instruction::Mov(src_ty.clone(), src.clone(), src_reg.clone()));
+                out.push(Instruction::Mov(
+                    src_ty.clone(),
+                    src.clone(),
+                    src_reg.clone(),
+                ));
                 src_reg
             } else {
                 src.clone()
             };
 
             if dst.is_register_operand() {
-                out.push(Instruction::IntToFloat(src_ty.clone(), dst_ty.clone(), src, dst.clone()));
+                out.push(Instruction::IntToFloat(
+                    src_ty.clone(),
+                    dst_ty.clone(),
+                    src,
+                    dst.clone(),
+                ));
             } else {
                 let dst_reg = dst_register(&AssemblyType::Double);
-                out.push(Instruction::IntToFloat(src_ty.clone(), dst_ty.clone(), src, dst_reg.clone()));
+                out.push(Instruction::IntToFloat(
+                    src_ty.clone(),
+                    dst_ty.clone(),
+                    src,
+                    dst_reg.clone(),
+                ));
                 out.push(Instruction::Mov(AssemblyType::Double, dst_reg, dst.clone()));
             }
 
@@ -207,17 +279,31 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
 
             let src = if matches!(src, Operand::Imm(_)) {
                 let src_reg = src_register(src_ty);
-                out.push(Instruction::Mov(src_ty.clone(), src.clone(), src_reg.clone()));
+                out.push(Instruction::Mov(
+                    src_ty.clone(),
+                    src.clone(),
+                    src_reg.clone(),
+                ));
                 src_reg
             } else {
                 src.clone()
             };
 
             if dst.is_register_operand() {
-                out.push(Instruction::UIntToFloat(src_ty.clone(), dst_ty.clone(), src, dst.clone()));
+                out.push(Instruction::UIntToFloat(
+                    src_ty.clone(),
+                    dst_ty.clone(),
+                    src,
+                    dst.clone(),
+                ));
             } else {
                 let dst_reg = dst_register(&AssemblyType::Double);
-                out.push(Instruction::UIntToFloat(src_ty.clone(), dst_ty.clone(), src, dst_reg.clone()));
+                out.push(Instruction::UIntToFloat(
+                    src_ty.clone(),
+                    dst_ty.clone(),
+                    src,
+                    dst_reg.clone(),
+                ));
                 out.push(Instruction::Mov(AssemblyType::Double, dst_reg, dst.clone()));
             }
 
@@ -228,7 +314,12 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
         Instruction::FloatToInt(src_ty, dst_ty, src, dst) if !dst.is_register_operand() => {
             let dst_reg = dst_register(dst_ty);
             vec![
-                Instruction::FloatToInt(src_ty.clone(), dst_ty.clone(), src.clone(), dst_reg.clone()),
+                Instruction::FloatToInt(
+                    src_ty.clone(),
+                    dst_ty.clone(),
+                    src.clone(),
+                    dst_reg.clone(),
+                ),
                 Instruction::Mov(dst_ty.clone(), dst_reg, dst.clone()),
             ]
         }
@@ -237,7 +328,12 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
         Instruction::FloatToUInt(src_ty, dst_ty, src, dst) if !dst.is_register_operand() => {
             let dst_reg = dst_register(dst_ty);
             vec![
-                Instruction::FloatToUInt(src_ty.clone(), dst_ty.clone(), src.clone(), dst_reg.clone()),
+                Instruction::FloatToUInt(
+                    src_ty.clone(),
+                    dst_ty.clone(),
+                    src.clone(),
+                    dst_reg.clone(),
+                ),
                 Instruction::Mov(dst_ty.clone(), dst_reg, dst.clone()),
             ]
         }

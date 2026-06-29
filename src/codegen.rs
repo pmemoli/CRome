@@ -24,6 +24,8 @@ pub enum TopLevel {
 // instruction = Mov(assembly_type, operand src, operand dst)
 //     | Movsx(operand src, operand dst)
 //     | MovZeroExtend(operand src, operand dst)
+//     | SFloatToDFloat(operand src, operand dst)
+//     | DFloatToSFloat(operand src, operand dst)
 //     | FloatToInt(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
 //     | FloatToUInt(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
 //     | IntToFloat(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
@@ -46,6 +48,8 @@ pub enum Instruction {
     Mov(AssemblyType, Operand, Operand),
     Movsx(Operand, Operand),
     MovZeroExtend(Operand, Operand),
+    SFloatToDFloat(Operand, Operand),
+    DFloatToSFloat(Operand, Operand),
     FloatToInt(AssemblyType, AssemblyType, Operand, Operand),
     FloatToUInt(AssemblyType, AssemblyType, Operand, Operand),
     IntToFloat(AssemblyType, AssemblyType, Operand, Operand),
@@ -93,6 +97,10 @@ pub enum Operand {
 }
 
 impl Operand {
+    pub fn is_imm_operand(&self) -> bool {
+        matches!(self, Operand::Imm(_))
+    }
+
     pub fn is_memory_operand(&self) -> bool {
         matches!(self, Operand::Stack(_) | Operand::Data(_))
     }

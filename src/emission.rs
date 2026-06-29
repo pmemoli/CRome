@@ -228,6 +228,16 @@ pub fn emission_instruction(
             let op_str = emission_operand(op, OperandSize::Qword);
             format!("pushq {}", op_str)
         }
+        codegen::Instruction::SFloatToDFloat(src, dst) => {
+            let src_str = emission_operand(src, OperandSize::Dword);
+            let dst_str = emission_operand(dst, OperandSize::Qword);
+            format!("cvtss2sd {},{}", src_str, dst_str)
+        }
+        codegen::Instruction::DFloatToSFloat(src, dst) => {
+            let src_str = emission_operand(src, OperandSize::Qword);
+            let dst_str = emission_operand(dst, OperandSize::Dword);
+            format!("cvtsd2ss {},{}", src_str, dst_str)
+        }
         codegen::Instruction::FloatToInt(src_ty, dst_ty, src, dst) => {
             let src_suffix = emission_type_suffix(src_ty);
             let dst_suffix = emission_type_suffix(dst_ty);

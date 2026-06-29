@@ -19,6 +19,8 @@ pub enum TopLevel {
 //     | SignExtend(val src, val dst)
 //     | Truncate(val src, val dst)
 //     | ZeroExtend(val src, val dst)
+//     | SFloatToDFloat(val src, val dst)
+//     | DFloatToSFloat(val src, val dst)
 //     | FloatToInt(val src, val dst)
 //     | FloatToUInt(val src, val dst)
 //     | IntToFloat(val src, val dst)
@@ -36,6 +38,8 @@ pub enum Instruction {
     Return(Val),
     SignExtend(Val, Val),
     ZeroExtend(Val, Val),
+    SFloatToDFloat(Val, Val),
+    DFloatToSFloat(Val, Val),
     FloatToInt(Val, Val),
     FloatToUInt(Val, Val),
     IntToFloat(Val, Val),
@@ -545,7 +549,7 @@ pub fn ast_expression_to_tacky(
             let dst = Val::Var(dst_name);
 
             match (t, inner_type) {
-                // double (float) conversion
+                // fp conversion conversion
                 (Type::Int | Type::Long, Type::Double | Type::Float) => {
                     instructions.push(Instruction::FloatToInt(result.clone(), dst.clone()))
                 }
@@ -557,6 +561,12 @@ pub fn ast_expression_to_tacky(
                 }
                 (Type::Double | Type::Float, Type::UInt | Type::ULong) => {
                     instructions.push(Instruction::UIntToFloat(result.clone(), dst.clone()))
+                }
+                (Type::Float, Type::Double) => {
+                    instructions.push(Instruction::DFloatToSFloat(result.clone(), dst.clone()))
+                }
+                (Type::Double, Type::Float) => {
+                    instructions.push(Instruction::SFloatToDFloat(result.clone(), dst.clone()))
                 }
                 // integer conversion
                 _ => {
