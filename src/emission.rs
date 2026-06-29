@@ -84,6 +84,7 @@ pub fn emission_top_level(asm_top_level: &codegen::TopLevel, symbol_table: &Symb
                     }
                 }
                 StaticInit::DoubleInit(f) => format!("    .quad {}\n", f.to_bits()),
+                StaticInit::FloatInit(f) => format!("    .long {}\n", f.to_bits()),
             };
 
             let init_value: i128 = match init {
@@ -91,7 +92,8 @@ pub fn emission_top_level(asm_top_level: &codegen::TopLevel, symbol_table: &Symb
                 StaticInit::UIntInit(i) => *i as i128,
                 StaticInit::LongInit(i) => *i as i128,
                 StaticInit::ULongInit(i) => *i as i128,
-                StaticInit::DoubleInit(_) => -1 as i128, // doubles never go into .bss
+                // floats never go into .bss
+                StaticInit::DoubleInit(_) | StaticInit::FloatInit(_) => -1 as i128,
             };
 
             let section_directive = if init_value == 0 {
@@ -114,6 +116,7 @@ pub fn emission_top_level(asm_top_level: &codegen::TopLevel, symbol_table: &Symb
             let alignment_directive = format!("    .align {}\n", alignment);
             let init_directive = match init {
                 StaticInit::DoubleInit(f) => format!("    .quad {}\n", f.to_bits()),
+                StaticInit::FloatInit(f) => format!("    .long {}\n", f.to_bits()),
                 _ => panic!("Unsupported static constant type"),
             };
 
@@ -225,28 +228,38 @@ pub fn emission_instruction(
             let op_str = emission_operand(op, OperandSize::Qword);
             format!("pushq {}", op_str)
         }
-        codegen::Instruction::Cvttsd2si(ty, src, dst) => {
-            let suffix = emission_type_suffix(ty);
+        codegen::Instruction::FloatToInt(src_ty, dst_ty, src, dst) => {
+            let src_suffix = emission_type_suffix(src_ty);
+            let dst_suffix = emission_type_suffix(dst_ty);
             let src_str = emission_operand(src, OperandSize::Qword);
-            let dst_str = emission_operand(dst, operand_size_from_type(ty));
-            format!("cvttsd2si{} {},{}", suffix, src_str, dst_str)
+            let dst_str = emission_operand(dst, operand_size_from_type(dst_ty));
+            format!(
+                "cvtt{}2si{} {},{}",
+                src_suffix, dst_suffix, src_str, dst_str
+            )
         }
-        codegen::Instruction::Cvtsi2sd(ty, src, dst) => {
-            let suffix = emission_type_suffix(ty);
-            let src_str = emission_operand(src, operand_size_from_type(ty));
+        codegen::Instruction::IntToFloat(src_ty, dst_ty, src, dst) => {
+            let src_suffix = emission_type_suffix(src_ty);
+            let dst_suffix = emission_type_suffix(dst_ty);
+            let src_str = emission_operand(src, operand_size_from_type(src_ty));
             let dst_str = emission_operand(dst, OperandSize::Qword);
-            format!("cvtsi2sd{} {},{}", suffix, src_str, dst_str)
+            format!("cvtsi2{}{} {},{}", dst_suffix, src_suffix, src_str, dst_str)
         }
-        codegen::Instruction::Vcvtusi2sd(ty, src, dst) => {
-            let suffix = emission_type_suffix(ty);
-            let src_str = emission_operand(src, operand_size_from_type(ty));
-            let dst_str = emission_operand(dst, OperandSize::Qword);
-            format!("vcvtusi2sd{} {},{},{}", suffix, src_str, dst_str, dst_str)
-        }
-        codegen::Instruction::Vcvttsd2usi(ty, src, dst) => {
+        codegen::Instruction::FloatToUInt(src_ty, dst_ty, src, dst) => {
+            let src_suffix = emission_type_suffix(src_ty);
             let src_str = emission_operand(src, OperandSize::Qword);
-            let dst_str = emission_operand(dst, operand_size_from_type(ty));
-            format!("vcvttsd2usi {},{}", src_str, dst_str)
+            let dst_str = emission_operand(dst, operand_size_from_type(dst_ty));
+            format!("vcvtt{}2usi {},{}", src_suffix, src_str, dst_str)
+        }
+        codegen::Instruction::UIntToFloat(src_ty, dst_ty, src, dst) => {
+            let src_suffix = emission_type_suffix(src_ty);
+            let dst_suffix = emission_type_suffix(dst_ty);
+            let src_str = emission_operand(src, operand_size_from_type(src_ty));
+            let dst_str = emission_operand(dst, OperandSize::Qword);
+            format!(
+                "vcvtusi2{}{} {},{},{}",
+                dst_suffix, src_suffix, src_str, dst_str, dst_str
+            )
         }
         codegen::Instruction::Call(label) => {
             if let Some(symbol_info) = symbol_table.map.get(label) {
@@ -269,6 +282,7 @@ pub fn operand_size_from_type(asm_type: &AssemblyType) -> OperandSize {
         AssemblyType::Longword => OperandSize::Dword,
         AssemblyType::Quadword => OperandSize::Qword,
         AssemblyType::Double => OperandSize::Qword,
+        AssemblyType::Float => OperandSize::Dword,
     }
 }
 
@@ -312,16 +326,16 @@ pub fn emission_register(asm_reg: &codegen::Reg, size: OperandSize) -> String {
         (codegen::Reg::R11, OperandSize::Qword) => String::from("%r11"),
 
         // XMM0 regs
-        (codegen::Reg::XMM0, OperandSize::Qword) => String::from("%xmm0"),
-        (codegen::Reg::XMM1, OperandSize::Qword) => String::from("%xmm1"),
-        (codegen::Reg::XMM2, OperandSize::Qword) => String::from("%xmm2"),
-        (codegen::Reg::XMM3, OperandSize::Qword) => String::from("%xmm3"),
-        (codegen::Reg::XMM4, OperandSize::Qword) => String::from("%xmm4"),
-        (codegen::Reg::XMM5, OperandSize::Qword) => String::from("%xmm5"),
-        (codegen::Reg::XMM6, OperandSize::Qword) => String::from("%xmm6"),
-        (codegen::Reg::XMM7, OperandSize::Qword) => String::from("%xmm7"),
-        (codegen::Reg::XMM14, OperandSize::Qword) => String::from("%xmm14"),
-        (codegen::Reg::XMM15, OperandSize::Qword) => String::from("%xmm15"),
+        (codegen::Reg::XMM0, _) => String::from("%xmm0"),
+        (codegen::Reg::XMM1, _) => String::from("%xmm1"),
+        (codegen::Reg::XMM2, _) => String::from("%xmm2"),
+        (codegen::Reg::XMM3, _) => String::from("%xmm3"),
+        (codegen::Reg::XMM4, _) => String::from("%xmm4"),
+        (codegen::Reg::XMM5, _) => String::from("%xmm5"),
+        (codegen::Reg::XMM6, _) => String::from("%xmm6"),
+        (codegen::Reg::XMM7, _) => String::from("%xmm7"),
+        (codegen::Reg::XMM14, _) => String::from("%xmm14"),
+        (codegen::Reg::XMM15, _) => String::from("%xmm15"),
 
         // Stack regs
         (codegen::Reg::SP, OperandSize::Qword) => String::from("%rsp"),
@@ -347,6 +361,7 @@ pub fn emission_type_suffix(asm_type: &AssemblyType) -> String {
     match asm_type {
         AssemblyType::Longword => String::from("l"),
         AssemblyType::Quadword => String::from("q"),
+        AssemblyType::Float => String::from("ss"),
         AssemblyType::Double => String::from("sd"),
     }
 }

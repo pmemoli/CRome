@@ -469,32 +469,56 @@ pub fn tacky_instruction_to_asm(
             let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
 
             let asm_src_type = tacky_value_type_asm(src, symbol_table);
+            let asm_dst_type = tacky_value_type_asm(dst, symbol_table);
 
-            vec![Instruction::IntToFloat(asm_src_type, asm_src, asm_dst)]
+            vec![Instruction::IntToFloat(
+                asm_src_type,
+                asm_dst_type,
+                asm_src,
+                asm_dst,
+            )]
         }
         tacky::Instruction::UIntToFloat(src, dst) => {
             let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
             let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
 
             let asm_src_type = tacky_value_type_asm(src, symbol_table);
+            let asm_dst_type = tacky_value_type_asm(dst, symbol_table);
 
-            vec![Instruction::UIntToFloat(asm_src_type, asm_src, asm_dst)]
+            vec![Instruction::UIntToFloat(
+                asm_src_type,
+                asm_dst_type,
+                asm_src,
+                asm_dst,
+            )]
         }
         tacky::Instruction::FloatToInt(src, dst) => {
             let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
             let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
 
+            let asm_src_type = tacky_value_type_asm(src, symbol_table);
             let asm_dst_type = tacky_value_type_asm(dst, symbol_table);
 
-            vec![Instruction::FloatToInt(asm_dst_type, asm_src, asm_dst)]
+            vec![Instruction::FloatToInt(
+                asm_src_type,
+                asm_dst_type,
+                asm_src,
+                asm_dst,
+            )]
         }
         tacky::Instruction::FloatToUInt(src, dst) => {
             let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
             let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
 
+            let asm_src_type = tacky_value_type_asm(src, symbol_table);
             let asm_dst_type = tacky_value_type_asm(dst, symbol_table);
 
-            vec![Instruction::FloatToUInt(asm_dst_type, asm_src, asm_dst)]
+            vec![Instruction::FloatToUInt(
+                asm_src_type,
+                asm_dst_type,
+                asm_src,
+                asm_dst,
+            )]
         }
     }
 }

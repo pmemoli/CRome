@@ -2,20 +2,18 @@
 
 C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". 
 
-The project is just the compiler, we use cpp as the preprocessor, as as the assembler and ld as the linker. 
+The project is just the compiler, cpp is the preprocessor, as as the assembler and ld as the linker. 
 
-The final goal is writing and compiling a simple xv6-like OS (RomeOS).  
+The final goal is writing and compiling a simple xv6-like OS (RomeOS) with it.  
 
-After implementing the book's subset of C, the language will be extended with more optimizations and features as they are required for RomeOS.
+## TODO
 
 Currently in chapter 14 / 20 and adding remaining integer types, finished part 1.
 
-TODO:
-
-- Pass C1-13 NS tests to the integration test suite
-- Refactor the driver to be more modular
-- Floats emission
-- Thorough float tests based on NS double examples
+- Test suite:
+    - Wire everything up properly
+    - Pass C1-13 NS tests to the integration test suite
+    - Thorough float tests based on NS double examples
 
 - NaNs
 
@@ -204,10 +202,10 @@ top_level = Function(identifier name, bool global, instruction* instructions)
 instruction = Mov(assembly_type, operand src, operand dst)
     | Movsx(operand src, operand dst)
     | MovZeroExtend(operand src, operand dst)
-    | FloatToInt(assembly_type dst_type, operand src, operand dst)
-    | FloatToUInt(assembly_type src_type, operand src, operand dst)
-    | IntToFloat(assembly_type src_type, operand src, operand dst)
-    | UIntToFloat(assembly_type src_type, operand src, operand dst)
+    | FloatToInt(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
+    | FloatToUInt(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
+    | IntToFloat(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
+    | UIntToFloat(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
     | Unary(unary_operator, assembly_type, operand)
     | Binary(binary_operator, assembly_type, operand, operand)
     | Cmp(assembly_type, operand, operand)

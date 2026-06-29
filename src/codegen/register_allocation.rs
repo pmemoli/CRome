@@ -130,25 +130,25 @@ pub fn resolve_pseudo_registers_instruction(
             let resolved_op_2 = resolve_pseudo_registers_operand(op_2, symbol_table, local_stack);
             Instruction::MovZeroExtend(resolved_op_1, resolved_op_2)
         }
-        Instruction::FloatToInt(ty, src, dst) => {
+        Instruction::FloatToInt(src_ty, dst_ty, src, dst) => {
             let resolved_src = resolve_pseudo_registers_operand(src, symbol_table, local_stack);
             let resolved_dst = resolve_pseudo_registers_operand(dst, symbol_table, local_stack);
-            Instruction::FloatToInt(ty.clone(), resolved_src, resolved_dst)
+            Instruction::FloatToInt(src_ty.clone(), dst_ty.clone(), resolved_src, resolved_dst)
         }
-        Instruction::IntToFloat(ty, src, dst) => {
+        Instruction::IntToFloat(src_ty, dst_ty, src, dst) => {
             let resolved_src = resolve_pseudo_registers_operand(src, symbol_table, local_stack);
             let resolved_dst = resolve_pseudo_registers_operand(dst, symbol_table, local_stack);
-            Instruction::IntToFloat(ty.clone(), resolved_src, resolved_dst)
+            Instruction::IntToFloat(src_ty.clone(), dst_ty.clone(), resolved_src, resolved_dst)
         }
-        Instruction::FloatToUInt(ty, src, dst) => {
+        Instruction::FloatToUInt(src_ty, dst_ty, src, dst) => {
             let resolved_src = resolve_pseudo_registers_operand(src, symbol_table, local_stack);
             let resolved_dst = resolve_pseudo_registers_operand(dst, symbol_table, local_stack);
-            Instruction::FloatToUInt(ty.clone(), resolved_src, resolved_dst)
+            Instruction::FloatToUInt(src_ty.clone(), dst_ty.clone(), resolved_src, resolved_dst)
         }
-        Instruction::UIntToFloat(ty, src, dst) => {
+        Instruction::UIntToFloat(src_ty, dst_ty, src, dst) => {
             let resolved_src = resolve_pseudo_registers_operand(src, symbol_table, local_stack);
             let resolved_dst = resolve_pseudo_registers_operand(dst, symbol_table, local_stack);
-            Instruction::UIntToFloat(ty.clone(), resolved_src, resolved_dst)
+            Instruction::UIntToFloat(src_ty.clone(), dst_ty.clone(), resolved_src, resolved_dst)
         }
         i => i.clone(),
     }

@@ -1,4 +1,4 @@
-mod assembler;
-mod compiler;
-mod linker;
-mod preprocessor;
+pub mod assembler;
+pub mod compiler;
+pub mod linker;
+pub mod preprocessor;

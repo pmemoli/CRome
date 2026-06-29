@@ -2,11 +2,16 @@ use anyhow::{Ok, Result, bail};
 use std::{fs, process::Command};
 use tempfile::NamedTempFile;
 
-pub fn preprocessor(path: &str) -> Result<String> {
+pub fn preprocessor(content: &str) -> Result<String> {
+    let cpp_file = NamedTempFile::new()?;
+    let cpp_path = cpp_file.path();
+    fs::write(cpp_path, content)?;
+
     let preprocessor_file = NamedTempFile::new()?;
     let preprocessor_file_path = preprocessor_file.path();
     let preprocessor_status = Command::new("cpp")
-        .arg(path)
+        .arg("-P")
+        .arg(cpp_path)
         .arg(preprocessor_file_path)
         .status()?;
 

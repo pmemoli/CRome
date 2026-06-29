@@ -2,7 +2,7 @@ use anyhow::{Ok, Result, bail};
 use std::{fs, process::Command};
 use tempfile::NamedTempFile;
 
-pub fn assembler(content: &str, debug: bool) -> Result<String> {
+pub fn assembler(content: &str, debug: bool) -> Result<Vec<u8>> {
     let assembler_file = NamedTempFile::new()?;
     let assembler_file_path = assembler_file.path();
     fs::write(assembler_file_path, content)?;
@@ -27,6 +27,6 @@ pub fn assembler(content: &str, debug: bool) -> Result<String> {
         bail!("Assembly failed at runtime.");
     }
 
-    let object_content = fs::read_to_string(output_file_path)?;
+    let object_content = fs::read(output_file_path)?;
     Ok(object_content)
 }

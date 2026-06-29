@@ -24,10 +24,10 @@ pub enum TopLevel {
 // instruction = Mov(assembly_type, operand src, operand dst)
 //     | Movsx(operand src, operand dst)
 //     | MovZeroExtend(operand src, operand dst)
-//     | FloatToInt(assembly_type dst_type, operand src, operand dst)
-//     | FloatToUInt(assembly_type src_type, operand src, operand dst)
-//     | IntToFloat(assembly_type src_type, operand src, operand dst)
-//     | UIntToFloat(assembly_type src_type, operand src, operand dst)
+//     | FloatToInt(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
+//     | FloatToUInt(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
+//     | IntToFloat(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
+//     | UIntToFloat(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
 //     | Unary(unary_operator, assembly_type, operand)
 //     | Binary(binary_operator, assembly_type, operand, operand)
 //     | Cmp(assembly_type, operand, operand)
@@ -46,10 +46,10 @@ pub enum Instruction {
     Mov(AssemblyType, Operand, Operand),
     Movsx(Operand, Operand),
     MovZeroExtend(Operand, Operand),
-    FloatToInt(AssemblyType, Operand, Operand),
-    FloatToUInt(AssemblyType, Operand, Operand),
-    IntToFloat(AssemblyType, Operand, Operand),
-    UIntToFloat(AssemblyType, Operand, Operand),
+    FloatToInt(AssemblyType, AssemblyType, Operand, Operand),
+    FloatToUInt(AssemblyType, AssemblyType, Operand, Operand),
+    IntToFloat(AssemblyType, AssemblyType, Operand, Operand),
+    UIntToFloat(AssemblyType, AssemblyType, Operand, Operand),
     Unary(UnaryOperator, AssemblyType, Operand),
     Binary(BinaryOperator, AssemblyType, Operand, Operand),
     Cmp(AssemblyType, Operand, Operand),
