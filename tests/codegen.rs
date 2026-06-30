@@ -1,7 +1,20 @@
+mod common;
 mod driver;
 
-#[test]
-#[cfg(feature = "codegen")]
-fn test_codegen_float_valid() {
-    driver::codegen("./tests/source/float_valid.c").unwrap();
-}
+crate::valid_tests!(
+    "codegen",
+    driver::codegen,
+    "minimal_compiler",
+    "unary_operators",
+    "binary_operators",
+    "logical_operators",
+    "local_variables",
+    "compound_statements",
+    "loops",
+    "if_statements",
+    "functions",
+    "linkage",
+    "longs",
+    "unsigned_integers",
+    "doubles"
+);

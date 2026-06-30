@@ -1,13 +1,13 @@
 use anyhow::{Ok, Result};
 
-#[cfg(feature = "validate")]
+#[cfg(feature = "semantic")]
 use crate::symbol;
 
 // Could probably be refactored to something cleaner, but whatever
 pub fn compiler(source: &str) -> Result<String> {
     let asm_str = String::new();
 
-    #[cfg(feature = "validate")]
+    #[cfg(feature = "semantic")]
     let mut symbol_table = symbol::SymbolTable::new();
 
     #[cfg(feature = "lex")]
@@ -17,12 +17,12 @@ pub fn compiler(source: &str) -> Result<String> {
 
     #[cfg(feature = "parser")]
     let ast = crate::parser::parse_program(&mut tokens.clone());
-    #[cfg(all(feature = "parser", not(feature = "validate")))]
+    #[cfg(all(feature = "parser", not(feature = "semantic")))]
     return Ok(format!("{:#?}", ast));
 
-    #[cfg(feature = "validate")]
+    #[cfg(feature = "semantic")]
     let resolved_ast = crate::semantic::semantic_analysis(&ast, &mut symbol_table);
-    #[cfg(all(feature = "validate", not(feature = "tacky")))]
+    #[cfg(all(feature = "semantic", not(feature = "tacky")))]
     return Ok(format!("{:#?}", resolved_ast));
 
     #[cfg(feature = "tacky")]

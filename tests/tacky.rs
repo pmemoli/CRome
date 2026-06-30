@@ -1,7 +1,20 @@
+mod common;
 mod driver;
 
-#[test]
-#[cfg(feature = "tacky")]
-fn test_tacky_float_valid() {
-    driver::tacky("./tests/source/float_valid.c").unwrap();
-}
+crate::valid_tests!(
+    "tacky",
+    driver::tacky,
+    "minimal_compiler",
+    "unary_operators",
+    "binary_operators",
+    "logical_operators",
+    "local_variables",
+    "compound_statements",
+    "loops",
+    "if_statements",
+    "functions",
+    "linkage",
+    "longs",
+    "unsigned_integers",
+    "doubles"
+);

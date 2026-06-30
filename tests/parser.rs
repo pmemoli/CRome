@@ -1,7 +1,38 @@
+mod common;
 mod driver;
 
-#[test]
-#[cfg(feature = "parser")]
-fn test_parser_float_valid() {
-    driver::parser("./tests/source/float_valid.c").unwrap();
-}
+crate::invalid_tests!(
+    "parser",
+    driver::parser,
+    "minimal_compiler",
+    "unary_operators",
+    "binary_operators",
+    "logical_operators",
+    "local_variables",
+    "compound_statements",
+    "loops",
+    "if_statements",
+    "functions",
+    "linkage",
+    "longs",
+    "unsigned_integers",
+    "doubles"
+);
+
+crate::valid_tests!(
+    "parser",
+    driver::parser,
+    "minimal_compiler",
+    "unary_operators",
+    "binary_operators",
+    "logical_operators",
+    "local_variables",
+    "compound_statements",
+    "loops",
+    "if_statements",
+    "functions",
+    "linkage",
+    "longs",
+    "unsigned_integers",
+    "doubles"
+);

@@ -1,7 +1,30 @@
+mod common;
 mod driver;
 
-#[test]
-#[cfg(feature = "lex")]
-fn test_lexer_valid() {
-    driver::lexer("./tests/source/float_valid.c").unwrap();
-}
+crate::invalid_tests!(
+    "lex",
+    driver::lexer,
+    "minimal_compiler",
+    "if_statements",
+    "longs",
+    "doubles",
+    "unsigned_integers"
+);
+
+crate::valid_tests!(
+    "lex",
+    driver::lexer,
+    "minimal_compiler",
+    "unary_operators",
+    "binary_operators",
+    "logical_operators",
+    "local_variables",
+    "compound_statements",
+    "loops",
+    "if_statements",
+    "functions",
+    "linkage",
+    "longs",
+    "unsigned_integers",
+    "doubles"
+);

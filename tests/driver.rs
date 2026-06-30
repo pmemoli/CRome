@@ -20,8 +20,8 @@ pub fn parser(path: &str) -> Result<String> {
     return Ok(format!("{:#?}", ast));
 }
 
-#[cfg(feature = "validate")]
-pub fn validate(path: &str) -> Result<String> {
+#[cfg(feature = "semantic")]
+pub fn semantic(path: &str) -> Result<String> {
     let content = std::fs::read_to_string(path).unwrap();
     let preprocessed_content = driver::preprocessor::preprocessor(&content)?;
 

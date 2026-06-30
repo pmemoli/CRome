@@ -6,9 +6,9 @@ pub mod emission;
 pub mod lexer;
 #[cfg(feature = "parser")]
 pub mod parser;
-#[cfg(feature = "validate")]
+#[cfg(feature = "semantic")]
 pub mod semantic;
-#[cfg(feature = "validate")]
+#[cfg(feature = "semantic")]
 pub mod symbol;
 #[cfg(feature = "tacky")]
 pub mod tacky;

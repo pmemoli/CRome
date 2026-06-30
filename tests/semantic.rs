@@ -1,7 +1,34 @@
+mod common;
 mod driver;
 
-#[test]
-#[cfg(feature = "validate")]
-fn test_semantic_float_valid() {
-    driver::validate("./tests/source/float_valid.c").unwrap();
-}
+crate::invalid_tests!(
+    "semantic",
+    driver::semantic,
+    "compound_statements",
+    "if_statements",
+    "local_variables",
+    "longs",
+    "loops",
+    "doubles",
+    "functions",
+    "linkage",
+    "unsigned_integers"
+);
+
+crate::valid_tests!(
+    "semantic",
+    driver::semantic,
+    "minimal_compiler",
+    "unary_operators",
+    "binary_operators",
+    "logical_operators",
+    "local_variables",
+    "compound_statements",
+    "loops",
+    "if_statements",
+    "functions",
+    "linkage",
+    "longs",
+    "unsigned_integers",
+    "doubles"
+);
