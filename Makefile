@@ -1,7 +1,7 @@
 STAGE ?= "emission"
 
 run:
-	cargo run --no-default-features --features $(STAGE) main.c -p
+	cargo run --no-default-features --features $(STAGE) main.c -p -o main
 
 test:
 	cargo test --no-default-features --features $(STAGE)
