@@ -77,15 +77,25 @@ pub fn emission(path: &str) -> Result<String> {
 }
 
 #[cfg(feature = "emission")]
-pub fn compile_exit_code(path: &str, libs: &Vec<String>) -> Result<i32> {
-    let result = emission(path).unwrap();
-    let reloc_elf = driver::assembler::assembler(&result, false).unwrap();
+pub fn compile_and_run(paths: &Vec<String>, libs: &Vec<String>) -> Result<i32> {
+    let mut reloc_elfs = Vec::new();
+
+    for path in paths {
+        let asm = if path.ends_with(".s") {
+            std::fs::read_to_string(path).unwrap()
+        } else {
+            emission(path).unwrap()
+        };
+        let reloc_elf = driver::assembler::assembler(&asm, false).unwrap();
+        reloc_elfs.push(reloc_elf);
+    }
+
+    let libs_str: Vec<&str> = libs.iter().map(|s| s.as_str()).collect();
 
     let output_file = tempfile::NamedTempFile::new().unwrap().into_temp_path();
     let output_path = output_file.to_str().unwrap().to_string();
 
-    let libs_str: Vec<&str> = libs.iter().map(|s| s.as_str()).collect();
-    driver::linker::linker(&reloc_elf, libs_str, &output_path).unwrap();
+    driver::linker::linker(&reloc_elfs, libs_str, &output_path).unwrap();
 
     let status = std::process::Command::new(&output_path).status()?;
     let exit_code = status.code();

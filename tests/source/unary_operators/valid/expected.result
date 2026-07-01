@@ -1,0 +1,12 @@
+bitwise.c 243
+bitwise_int_min.c 254
+bitwise_zero.c 255
+negate_int_max.c 1
+neg.c 251
+neg_zero.c 0
+nested_ops_2.c 1
+nested_ops.c 2
+parens_2.c 253
+parens_3.c 4
+parens.c 254
+redundant_parens.c 246

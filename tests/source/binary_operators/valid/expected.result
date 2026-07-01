@@ -1,0 +1,15 @@
+add.c 3
+associativity_2.c 1
+associativity_3.c 8
+associativity_and_precedence.c 10
+associativity.c 252
+div.c 2
+div_neg.c 254
+mod.c 0
+mult.c 6
+parens.c 14
+precedence.c 14
+sub.c 255
+sub_neg.c 3
+unop_add.c 0
+unop_parens.c 253

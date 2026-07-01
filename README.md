@@ -11,17 +11,14 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS) with it.
 Currently in chapter 14 / 20 and adding the 32 bit float type, finished part 1.
 
 - Test suite:
-    - Pass C1-13 NS tests to the integration test suite
     - Thorough float tests based on NS double examples
-
-- NaNs
 
 - Chapter 14
 - Refactor instruction fixup, its horrendous
 
 Backlog:
 
-- Proper error reporting system, currently just panics with a message and a backtrace.
+- Proper error reporting, currently it just panics xdxd
 
 ## Lexer
 
@@ -291,9 +288,11 @@ Invalid c programs where the corresponding pass of the frontend should panic:
 - Syntax errors where the parser should panic
 - Semantic errors where the semantic analysis pass should panic
 
+These reside in tests/source/{feature}/invalid
+
 ### Valid programs (All passes)
 
-Valid c programs where the compiler should compile and run them correctly. For tacky, codegen and emission no pass should panic, and the emission tests also run the compiled executable and assert that exit code is 0.
+Valid c programs where the compiler should compile and run them correctly. For tacky, codegen and emission no pass should panic, and the emission tests also run the compiled executable and assert that exit code is X.
 
 - Direct use when defining constants and using the type in expressions should behave as expected.
 - Explicit casting should behave as expected.
@@ -304,3 +303,7 @@ Valid c programs where the compiler should compile and run them correctly. For t
 - In function calls, where the input and output types contain the new type.
 - In expressions distributed across many translation units (linking)
 - Edge cases and general programs doing complex operations
+
+These reside in tests/source/{feature}/valid, and a expected.result file for each .c file with the expected exit code.
+
+Logic is too tied to the folder structure which is nasty but whatever.

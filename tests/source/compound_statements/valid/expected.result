@@ -1,0 +1,11 @@
+assign_to_self_2.c 3
+assign_to_self.c 4
+declaration_only.c 1
+empty_blocks.c 30
+hidden_then_visible.c 1
+hidden_variable.c 1
+inner_uninitialized.c 4
+multiple_vars_same_name.c 2
+nested_if.c 1
+similar_var_names.c 28
+use_in_inner_scope.c 3
