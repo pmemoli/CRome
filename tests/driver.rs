@@ -1,6 +1,8 @@
 use anyhow::{Result, bail};
 use crome::driver;
 
+use std::process::{Command, Stdio};
+
 #[cfg(feature = "lex")]
 pub fn lexer(path: &str) -> Result<String> {
     let content = std::fs::read_to_string(path).unwrap();
@@ -82,11 +84,11 @@ pub fn compile_and_run(paths: &Vec<String>, libs: &Vec<String>) -> Result<i32> {
 
     for path in paths {
         let asm = if path.ends_with(".s") {
-            std::fs::read_to_string(path).unwrap()
+            std::fs::read_to_string(path)?
         } else {
-            emission(path).unwrap()
+            emission(path)?
         };
-        let reloc_elf = driver::assembler::assembler(&asm, false).unwrap();
+        let reloc_elf = driver::assembler::assembler(&asm, false)?;
         reloc_elfs.push(reloc_elf);
     }
 
@@ -95,9 +97,13 @@ pub fn compile_and_run(paths: &Vec<String>, libs: &Vec<String>) -> Result<i32> {
     let output_file = tempfile::NamedTempFile::new().unwrap().into_temp_path();
     let output_path = output_file.to_str().unwrap().to_string();
 
-    driver::linker::linker(&reloc_elfs, libs_str, &output_path).unwrap();
+    driver::linker::linker(&reloc_elfs, libs_str, &output_path)?;
 
-    let status = std::process::Command::new(&output_path).status()?;
+    // don't want the output messing with the test output.
+    let status = Command::new(&output_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()?;
     let exit_code = status.code();
 
     let Some(actual) = exit_code else {

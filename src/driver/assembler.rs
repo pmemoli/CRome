@@ -1,5 +1,5 @@
 use anyhow::{Ok, Result, bail};
-use std::{fs, process::Command};
+use std::{fs, process::Command, process::Stdio};
 use tempfile::NamedTempFile;
 
 pub fn assembler(content: &str, debug: bool) -> Result<Vec<u8>> {
@@ -21,10 +21,13 @@ pub fn assembler(content: &str, debug: bool) -> Result<Vec<u8>> {
         assembler_command.arg("-g");
     }
 
-    let assembler_status = assembler_command.status()?;
+    let assembler_output = assembler_command.output()?;
 
-    if !assembler_status.success() {
-        bail!("Assembly failed at runtime.");
+    if !assembler_output.status.success() {
+        bail!(
+            "Assembly failed at runtime.\n{}",
+            String::from_utf8_lossy(&assembler_output.stderr)
+        );
     }
 
     let object_content = fs::read(output_file_path)?;

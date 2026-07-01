@@ -34,69 +34,39 @@ valid_tests!(
     ("longs", []),
     ("unsigned_integers", []),
     ("doubles", ["m"]),
+    ("floats", ["m"]),
 );
 
 pub fn emission_test_pass_valid(folder_path: &str, libs: &Vec<String>) {
     let expected = load_expected(folder_path);
 
-    // standalone tests (may include asm helpers)
-    for entry in WalkDir::new(folder_path) {
-        let entry = entry.unwrap();
+    for entry in WalkDir::new(folder_path).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
-        let path_str = path.to_str().unwrap();
 
-        if path_str.contains("/libraries") || !path.is_file() || !path_str.ends_with(".c") {
-            continue;
-        }
+        if is_leaf_directory(path) {
+            let test_name = path.file_name().unwrap().to_str().unwrap();
 
-        let rel = path_str
-            .strip_prefix(&format!("{}/", folder_path))
-            .unwrap()
-            .to_string();
-
-        let &exp = expected
-            .get(&rel)
-            .unwrap_or_else(|| panic!("No expected exit code for {}", rel));
-
-        let mut compilation_units = vec![path_str.to_string()];
-        compilation_units.extend(asm_helpers(path_str));
-
-        run_and_check(&compilation_units, libs, &rel, exp);
-    }
-
-    // tests that require linking (foo_client.c + foo.c)
-    let lib_dir = format!("{}/libraries", folder_path);
-    if Path::new(&lib_dir).exists() {
-        for entry in WalkDir::new(&lib_dir) {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            let path_str = path.to_str().unwrap();
-
-            if !path.is_file() || !path_str.ends_with("_client.c") {
-                continue;
-            }
-
-            let rel = path_str
-                .strip_prefix(&format!("{}/", folder_path))
+            let compilation_units: Vec<String> = std::fs::read_dir(path)
                 .unwrap()
-                .to_string();
+                .filter_map(|e| e.ok())
+                .map(|e| e.path().to_str().unwrap().to_string())
+                .collect();
 
-            let &exp = expected
-                .get(&rel)
-                .unwrap_or_else(|| panic!("No expected exit code for {}", rel));
+            let expected_exit_code = expected
+                .get(test_name)
+                .unwrap_or_else(|| panic!("Expected exit code not found for test: {}", test_name));
 
-            let impl_file = path_str.replace("_client.c", ".c");
-            let mut compilation_units = vec![path_str.to_string()];
-            if Path::new(&impl_file).exists() {
-                compilation_units.push(impl_file);
-            }
-
-            run_and_check(&compilation_units, libs, &rel, exp);
+            run_and_check(&compilation_units, libs, &test_name, *expected_exit_code);
         }
     }
 }
 
-fn run_and_check(compilation_units: &Vec<String>, libs: &Vec<String>, rel: &str, expected: i32) {
+fn run_and_check(
+    compilation_units: &Vec<String>,
+    libs: &Vec<String>,
+    test_name: &str,
+    expected: i32,
+) {
     let result = panic::catch_unwind(|| driver::compile_and_run(compilation_units, libs));
 
     match result.unwrap() {
@@ -105,30 +75,13 @@ fn run_and_check(compilation_units: &Vec<String>, libs: &Vec<String>, rel: &str,
             "Expected exit code {}, got {} for {:?}",
             expected,
             actual,
-            rel
+            test_name
         ),
-        Err(e) => panic!("Error compiling {:?}: {}", rel, e),
+        Err(e) => panic!("Error compiling {:?}: {}", test_name, e),
     }
 }
 
-fn asm_helpers(c_path: &str) -> Vec<String> {
-    let dir = Path::new(c_path).parent().unwrap();
-
-    let mut helpers = Vec::new();
-
-    for entry in std::fs::read_dir(dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        let name = path.to_str().unwrap_or("");
-
-        if name.ends_with("_linux.s") || (name.ends_with(".s") && !name.contains("_osx")) {
-            helpers.push(name.to_string());
-        }
-    }
-
-    helpers
-}
-
+// parses the expected.result file in each feature folder
 fn load_expected(folder_path: &str) -> HashMap<String, i32> {
     let result_file = format!("{}/expected.result", folder_path);
     let content = std::fs::read_to_string(&result_file).unwrap();
@@ -143,4 +96,20 @@ fn load_expected(folder_path: &str) -> HashMap<String, i32> {
             (path, code)
         })
         .collect()
+}
+
+pub fn is_leaf_directory(path: &Path) -> bool {
+    if !path.is_dir() {
+        return false;
+    }
+
+    for entry in std::fs::read_dir(path).unwrap() {
+        let entry = entry.unwrap();
+        let entry_path = entry.path();
+        if entry_path.is_dir() {
+            return false;
+        }
+    }
+
+    true
 }

@@ -18,7 +18,7 @@ Currently in chapter 14 / 20 and adding the 32 bit float type, finished part 1.
 
 Backlog:
 
-- Proper error reporting, currently it just panics xdxd
+- Proper error reporting, currently it just panics and unwraps everything xdxd
 
 ## Lexer
 
@@ -288,7 +288,7 @@ Invalid c programs where the corresponding pass of the frontend should panic:
 - Syntax errors where the parser should panic
 - Semantic errors where the semantic analysis pass should panic
 
-These reside in tests/source/{feature}/invalid
+These reside in tests/source/{feature}/invalid as single files.
 
 ### Valid programs (All passes)
 
@@ -304,6 +304,4 @@ Valid c programs where the compiler should compile and run them correctly. For t
 - In expressions distributed across many translation units (linking)
 - Edge cases and general programs doing complex operations
 
-These reside in tests/source/{feature}/valid, and a expected.result file for each .c file with the expected exit code.
-
-Logic is too tied to the folder structure which is nasty but whatever.
+These reside in tests/source/{feature}/valid, where each test is its own folder containing files to be translated and linked together.

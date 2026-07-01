@@ -1,7 +1,7 @@
-multi_digit.c 100
-newlines.c 0
-no_newlines.c 0
-return_0.c 0
-return_2.c 2
-spaces.c 0
-tabs.c 0
+multi_digit 100
+newlines 0
+no_newlines 0
+return_0 0
+return_2 2
+spaces 0
+tabs 0

@@ -3,6 +3,7 @@ use walkdir::WalkDir;
 
 use anyhow::Result;
 
+// used for passes outside emission
 pub fn test_pass_invalid(folder_path: &str, pass: fn(&str) -> Result<String>) {
     for entry in WalkDir::new(folder_path) {
         let entry = entry.unwrap();
