@@ -15,5 +15,19 @@ int main(void) {
      * 31093.75
      */
     float d = (ul + i) * 3.125;
-    return d == 31093.75;
+    if (d != 31093.75) {
+        return 1;
+    }
+
+    /* When we calculate f + d2, f is implicitly converted to
+     * double, the common type of float and double.
+     */
+    float f = 2.5f;
+    double d2 = 10000.0;
+    double result = f + d2;
+    if (result != 10002.5) {
+        return 2;
+    }
+
+    return 0;
 }

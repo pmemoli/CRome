@@ -1,10 +1,17 @@
 use anyhow::{Ok, Result, bail};
-use std::{fs, process::Command, process::Stdio};
+use std::path::Path;
+use std::{fs, process::Command};
 use tempfile::NamedTempFile;
 
 pub fn assembler(content: &str, debug: bool) -> Result<Vec<u8>> {
     let assembler_file = NamedTempFile::new()?;
-    let assembler_file_path = assembler_file.path();
+
+    let assembler_file_path = if debug {
+        Path::new("tmp.s")
+    } else {
+        assembler_file.path()
+    };
+
     fs::write(assembler_file_path, content)?;
 
     let output_file = NamedTempFile::new()?;

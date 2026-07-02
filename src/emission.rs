@@ -158,25 +158,31 @@ pub fn emission_instruction(
             let op_str = emission_operand(op, operand_size_from_type(ty));
             format!("{}{} {}", unop_str, suffix, op_str)
         }
-        codegen::Instruction::Binary(
-            codegen::BinaryOperator::Xor,
-            AssemblyType::Double,
-            src,
-            dst,
-        ) => {
-            let src_str = emission_operand(src, OperandSize::Qword);
-            let dst_str = emission_operand(dst, OperandSize::Qword);
-            format!("xorpd {},{}", src_str, dst_str)
+        codegen::Instruction::Binary(codegen::BinaryOperator::Xor, ty, src, dst)
+            if ty.is_floating_point() =>
+        {
+            let suffix = match ty {
+                AssemblyType::Double => "pd",
+                AssemblyType::Float => "ps",
+                _ => panic!("Unexpected type for floating point XOR"),
+            };
+
+            let op_size = operand_size_from_type(ty);
+            let src_str = emission_operand(src, op_size);
+            let dst_str = emission_operand(dst, op_size);
+            format!("xor{} {},{}", suffix, src_str, dst_str)
         }
         codegen::Instruction::Binary(
             codegen::BinaryOperator::Mult,
-            AssemblyType::Double,
+            ty @ (AssemblyType::Double | AssemblyType::Float),
             src,
             dst,
         ) => {
-            let src_str = emission_operand(src, OperandSize::Qword);
-            let dst_str = emission_operand(dst, OperandSize::Qword);
-            format!("mulsd {},{}", src_str, dst_str)
+            let op_size = operand_size_from_type(ty);
+            let suffix = emission_type_suffix(ty);
+            let src_str = emission_operand(src, op_size);
+            let dst_str = emission_operand(dst, op_size);
+            format!("mul{} {},{}", suffix, src_str, dst_str)
         }
         codegen::Instruction::Binary(binop, ty, src, dst) => {
             let binop_str = emission_binary_operator(binop);
@@ -186,10 +192,12 @@ pub fn emission_instruction(
             let dst_str = emission_operand(dst, size);
             format!("{}{} {},{}", binop_str, suffix, src_str, dst_str)
         }
-        codegen::Instruction::Cmp(AssemblyType::Double, src, dst) => {
-            let src_str = emission_operand(src, OperandSize::Qword);
-            let dst_str = emission_operand(dst, OperandSize::Qword);
-            format!("comisd {},{}", src_str, dst_str)
+        codegen::Instruction::Cmp(ty @ (AssemblyType::Double | AssemblyType::Float), src, dst) => {
+            let op_size = operand_size_from_type(ty);
+            let suffix = emission_type_suffix(ty);
+            let src_str = emission_operand(src, op_size);
+            let dst_str = emission_operand(dst, op_size);
+            format!("comi{} {},{}", suffix, src_str, dst_str)
         }
         codegen::Instruction::Cmp(ty, src, dst) => {
             let suffix = emission_type_suffix(ty);

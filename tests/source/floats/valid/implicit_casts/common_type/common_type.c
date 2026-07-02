@@ -31,6 +31,11 @@ float tern_float_result(int flag) {
      */
     return flag ? 5.0 : 9223372036854777850ul;
 }
+double add_float_and_double(float f, double d) {
+    // f is implicitly converted to double, the common type of float and double
+    return f + d;
+}
+
 int ten = 10;
 int multiply(void) {
     /* This should promote 10 to a float,
@@ -74,5 +79,11 @@ int main(void) {
     if (!multiply()) {
         return 6;
     }
+
+    /* Common type of float and double is double */
+    if (add_float_and_double(1.5f, 2.5) != 4.0) {
+        return 7;
+    }
+
     return 0;
 }

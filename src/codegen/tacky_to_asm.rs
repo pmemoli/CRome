@@ -213,18 +213,15 @@ pub fn tacky_instruction_to_asm(
                     ]
                 }
                 (tacky::UnaryOperator::Not, t) if t.is_floating_point() => {
+                    let asm_ty = symbol_type_to_asm_type(&t);
                     vec![
                         Instruction::Binary(
                             BinaryOperator::Xor,
-                            AssemblyType::Double,
+                            asm_ty.clone(),
                             Operand::Reg(Reg::XMM14),
                             Operand::Reg(Reg::XMM14),
                         ),
-                        Instruction::Cmp(
-                            AssemblyType::Double,
-                            src_asm_op,
-                            Operand::Reg(Reg::XMM14),
-                        ),
+                        Instruction::Cmp(asm_ty.clone(), src_asm_op, Operand::Reg(Reg::XMM14)),
                         Instruction::Mov(dst_asm_type, Operand::Imm(0), dst_asm_op.clone()),
                         Instruction::SetCC(CondCode::E, dst_asm_op),
                     ]
@@ -236,20 +233,17 @@ pub fn tacky_instruction_to_asm(
                     ]
                 }
                 (tacky::UnaryOperator::Negate, t) if t.is_floating_point() => {
-                    // Xorpd needs this 16 byte aligned rather than just 8
-                    let zero_constant_name = create_float_constant(
-                        -0.0,
-                        Type::Double,
-                        16,
-                        symbol_table,
-                        static_constant_names,
-                    );
+                    let asm_ty = symbol_type_to_asm_type(&t);
+
+                    // xorpd/xorps needs the operands 16 byte aligned
+                    let zero_constant_name =
+                        create_float_constant(-0.0, t, 16, symbol_table, static_constant_names);
 
                     vec![
-                        Instruction::Mov(AssemblyType::Double, src_asm_op, dst_asm_op.clone()),
+                        Instruction::Mov(asm_ty.clone(), src_asm_op, dst_asm_op.clone()),
                         Instruction::Binary(
                             BinaryOperator::Xor,
-                            AssemblyType::Double,
+                            asm_ty.clone(),
                             Operand::Data(zero_constant_name),
                             dst_asm_op.clone(),
                         ),
@@ -303,7 +297,7 @@ pub fn tacky_instruction_to_asm(
                         Instruction::Mov(src_a_asm_type, Operand::Reg(Reg::AX), dst_asm_op),
                     ]
                 }
-                (tacky::BinaryOperator::Divide, Type::Double) => {
+                (tacky::BinaryOperator::Divide, ty) if ty.is_floating_point() => {
                     vec![
                         Instruction::Mov(src_a_asm_type.clone(), src_a_asm_op, dst_asm_op.clone()),
                         Instruction::Binary(
@@ -396,18 +390,15 @@ pub fn tacky_instruction_to_asm(
 
             match ty {
                 t if t.is_floating_point() => {
+                    let asm_ty = symbol_type_to_asm_type(&t);
                     vec![
                         Instruction::Binary(
                             BinaryOperator::Xor,
-                            AssemblyType::Double,
+                            asm_ty.clone(),
                             Operand::Reg(Reg::XMM14),
                             Operand::Reg(Reg::XMM14),
                         ),
-                        Instruction::Cmp(
-                            AssemblyType::Double,
-                            cond_asm_op,
-                            Operand::Reg(Reg::XMM14),
-                        ),
+                        Instruction::Cmp(asm_ty, cond_asm_op, Operand::Reg(Reg::XMM14)),
                         Instruction::JmpCC(CondCode::E, label.to_string()),
                     ]
                 }
@@ -424,18 +415,15 @@ pub fn tacky_instruction_to_asm(
 
             match ty {
                 t if t.is_floating_point() => {
+                    let asm_ty = symbol_type_to_asm_type(&t);
                     vec![
                         Instruction::Binary(
                             BinaryOperator::Xor,
-                            AssemblyType::Double,
+                            asm_ty.clone(),
                             Operand::Reg(Reg::XMM14),
                             Operand::Reg(Reg::XMM14),
                         ),
-                        Instruction::Cmp(
-                            AssemblyType::Double,
-                            cond_asm_op,
-                            Operand::Reg(Reg::XMM14),
-                        ),
+                        Instruction::Cmp(asm_ty, cond_asm_op, Operand::Reg(Reg::XMM14)),
                         Instruction::JmpCC(CondCode::NE, label.to_string()),
                     ]
                 }
@@ -651,9 +639,9 @@ pub fn tacky_fun_call_to_asm(
     let dst_asm_type = tacky_value_type_asm(dst, symbol_table);
 
     match dst_asm_type {
-        AssemblyType::Double | AssemblyType::Float => {
+        t if t.is_floating_point() => {
             instructions.push(Instruction::Mov(
-                dst_asm_type,
+                t,
                 Operand::Reg(Reg::XMM0),
                 dst_asm_op.clone(),
             ));

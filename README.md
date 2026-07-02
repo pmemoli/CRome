@@ -10,15 +10,13 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS) with it.
 
 Currently in chapter 14 / 20 and adding the 32 bit float type, finished part 1.
 
-- Test suite:
-    - Thorough float tests based on NS double examples
-
 - Chapter 14
 - Refactor instruction fixup, its horrendous
 
 Backlog:
 
 - Proper error reporting, currently it just panics and unwraps everything xdxd
+- Nans
 
 ## Lexer
 

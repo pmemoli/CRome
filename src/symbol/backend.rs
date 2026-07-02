@@ -31,6 +31,18 @@ impl AssemblyType {
             Self::Double => 8,
         }
     }
+    pub fn is_floating_point(&self) -> bool {
+        match self {
+            Self::Float | Self::Double => true,
+            _ => false,
+        }
+    }
+    pub fn is_integer(&self) -> bool {
+        match self {
+            Self::Longword | Self::Quadword => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

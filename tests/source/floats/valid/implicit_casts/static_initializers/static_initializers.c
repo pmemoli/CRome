@@ -33,6 +33,15 @@ float d7 = 33554429ul;
 
 float uninitialized; // should be initialized to 0.0
 
+double d8 = 100.0f; // implicitly convert float to double, remains 100.0
+
+/* implicitly convert double to float; 16777217.0 (2^24 + 1) is
+ * represented exactly as a double, but is exactly halfway between the
+ * two nearest floats, 16777216.0 and 16777218.0; ties to even rounds
+ * this down to 16777216.0
+ */
+float d9 = 16777217.0;
+
 // integer variables
 
 static int i = 4.9; // truncated to 4
@@ -91,6 +100,14 @@ int main(void) {
 
     if (ul != 18446742974197923840ul) {
         return 12;
+    }
+
+    if (d8 != 100.0) {
+        return 13;
+    }
+
+    if (d9 != 16777216.0f) {
+        return 14;
     }
 
     return 0;

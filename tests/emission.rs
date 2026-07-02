@@ -37,6 +37,7 @@ valid_tests!(
     ("floats", ["m"]),
 );
 
+#[cfg(feature = "emission")]
 pub fn emission_test_pass_valid(folder_path: &str, libs: &Vec<String>) {
     let expected = load_expected(folder_path);
 
@@ -61,6 +62,7 @@ pub fn emission_test_pass_valid(folder_path: &str, libs: &Vec<String>) {
     }
 }
 
+#[cfg(feature = "emission")]
 fn run_and_check(
     compilation_units: &Vec<String>,
     libs: &Vec<String>,
@@ -82,6 +84,7 @@ fn run_and_check(
 }
 
 // parses the expected.result file in each feature folder
+#[cfg(feature = "emission")]
 fn load_expected(folder_path: &str) -> HashMap<String, i32> {
     let result_file = format!("{}/expected.result", folder_path);
     let content = std::fs::read_to_string(&result_file).unwrap();
@@ -98,6 +101,7 @@ fn load_expected(folder_path: &str) -> HashMap<String, i32> {
         .collect()
 }
 
+#[cfg(feature = "emission")]
 pub fn is_leaf_directory(path: &Path) -> bool {
     if !path.is_dir() {
         return false;

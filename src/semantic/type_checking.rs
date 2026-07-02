@@ -100,7 +100,7 @@ pub fn typecheck_block_scope_variable_declaration(
             // Convert the constant expression directly
             let new_init = init.as_ref().map(|e| static_convert_constant_expr(e, ty));
 
-            let initial_value = match init.as_ref() {
+            let initial_value = match new_init.as_ref() {
                 Some(parser::Expr::Constant(cons, _)) => {
                     InitialValue::Initial(constant_to_static_init(cons))
                 }

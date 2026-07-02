@@ -399,7 +399,9 @@ pub fn parse_type_from_specifiers(specifier_tokens: &mut Vec<Token>) -> Type {
     if specifier_tokens == &vec![Token::FloatKeyword] {
         return Type::Float;
     }
-    if specifier_tokens.contains(&Token::DoubleKeyword) {
+    if specifier_tokens.contains(&Token::DoubleKeyword)
+        || specifier_tokens.contains(&Token::FloatKeyword)
+    {
         panic!("Syntax Error: Can't combine 'double' with other type specifiers")
     }
 

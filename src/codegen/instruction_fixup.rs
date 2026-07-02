@@ -60,19 +60,14 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
         }
 
         // Double binops need to have dst as a register (checked before integer mem-mem)
-        Instruction::Binary(binop, AssemblyType::Double, src, dst)
-            if !dst.is_register_operand() =>
+        Instruction::Binary(binop, ty, src, dst)
+            if ty.is_floating_point() && !dst.is_register_operand() =>
         {
-            let dst_reg = dst_register(&AssemblyType::Double);
+            let dst_reg = dst_register(ty);
             vec![
-                Instruction::Mov(AssemblyType::Double, dst.clone(), dst_reg.clone()),
-                Instruction::Binary(
-                    binop.clone(),
-                    AssemblyType::Double,
-                    src.clone(),
-                    dst_reg.clone(),
-                ),
-                Instruction::Mov(AssemblyType::Double, dst_reg, dst.clone()),
+                Instruction::Mov(ty.clone(), dst.clone(), dst_reg.clone()),
+                Instruction::Binary(binop.clone(), ty.clone(), src.clone(), dst_reg.clone()),
+                Instruction::Mov(ty.clone(), dst_reg, dst.clone()),
             ]
         }
 
@@ -103,12 +98,12 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
             ]
         }
 
-        // Double cmp needs to have dst as a register
-        Instruction::Cmp(AssemblyType::Double, src, dst) if !dst.is_register_operand() => {
-            let dst_reg = dst_register(&AssemblyType::Double);
+        // Floating point cmp needs to have dst as a register
+        Instruction::Cmp(ty, src, dst) if !dst.is_register_operand() && ty.is_floating_point() => {
+            let dst_reg = dst_register(ty);
             vec![
-                Instruction::Mov(AssemblyType::Double, dst.clone(), dst_reg.clone()),
-                Instruction::Cmp(AssemblyType::Double, src.clone(), dst_reg),
+                Instruction::Mov(ty.clone(), dst.clone(), dst_reg.clone()),
+                Instruction::Cmp(ty.clone(), src.clone(), dst_reg),
             ]
         }
 
@@ -258,14 +253,14 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
                     dst.clone(),
                 ));
             } else {
-                let dst_reg = dst_register(&AssemblyType::Double);
+                let dst_reg = dst_register(dst_ty);
                 out.push(Instruction::IntToFloat(
                     src_ty.clone(),
                     dst_ty.clone(),
                     src,
                     dst_reg.clone(),
                 ));
-                out.push(Instruction::Mov(AssemblyType::Double, dst_reg, dst.clone()));
+                out.push(Instruction::Mov(dst_ty.clone(), dst_reg, dst.clone()));
             }
 
             out
@@ -297,14 +292,14 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
                     dst.clone(),
                 ));
             } else {
-                let dst_reg = dst_register(&AssemblyType::Double);
+                let dst_reg = dst_register(dst_ty);
                 out.push(Instruction::UIntToFloat(
                     src_ty.clone(),
                     dst_ty.clone(),
                     src,
                     dst_reg.clone(),
                 ));
-                out.push(Instruction::Mov(AssemblyType::Double, dst_reg, dst.clone()));
+                out.push(Instruction::Mov(dst_ty.clone(), dst_reg, dst.clone()));
             }
 
             out

@@ -1,24 +1,37 @@
-/* Call functions with both even and odd numbers of stack arguments,
- * to make sure the stack is correctly aligned in both cases.
- */
+// // Test reading and writing a local static float
+//
+// // Return old value, then increment by one
+// float return_static_variable(void) {
+//     static float d = 0.5;
+//     float ret = d;
+//     d = d + 1.0;
+//     return ret;
+// }
+//
+// int main(void) {
+//     float d1 = return_static_variable();
+//     float d2 = return_static_variable();
+//     float d3 = return_static_variable();
+//     if (d1 != 0.5) {
+//         return 1;
+//     }
+//     if (d2 != 1.5) {
+//         return 2;
+//     }
+//     if (d3 != 2.5) {
+//         return 3;
+//     }
+//     return 0;
+// }
 
-// these are defined in stack_alignment_check_<platform>.s
-// and exit with value -1 if RSP is misaligned or arguments
-// don't have the expected values
-int even_arguments(int a, int b, int c, int d, int e, int f, int g, int h);
-
-int odd_arguments(int a, int b, int c, int d, int e, int f, int g, int h,
-                  int i);
+float return_static_variable(void) {
+    static float d = 0.5;
+    float ret = d;
+    d = d + 1.0;
+    return ret;
+}
 
 int main(void) {
-    /* Allocate an argument on the stack, to check that
-     * we properly account for already-allocated stack space
-     * when deciding how much padding to add
-     */
-    int x = 3;
-    // call some functions, check stack alignment
-    even_arguments(1, 2, 3, 4, 5, 6, 7, 8);
-    odd_arguments(1, 2, 3, 4, 5, 6, 7, 8, 9);
-    // return x to make sure it hasn't been clobbered
-    return x;
+    float d1 = return_static_variable();
+    return d1 != 0.5;
 }
