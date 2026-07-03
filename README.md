@@ -8,7 +8,7 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS) with it.
 
 ## TODO
 
-Currently in chapter 14 / 20 and adding the 32 bit float type, finished part 1.
+Currently in chapter 14 / 20, finished part 1.
 
 - Chapter 14
 - Refactor instruction fixup, its horrendous
@@ -16,6 +16,7 @@ Currently in chapter 14 / 20 and adding the 32 bit float type, finished part 1.
 Backlog:
 
 - Proper error reporting, currently it just panics and unwraps everything xdxd
+- Bitwise operators
 - Nans
 
 ## Lexer

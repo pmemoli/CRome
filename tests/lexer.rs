@@ -8,8 +8,7 @@ crate::invalid_tests!(
     "if_statements",
     "longs",
     "doubles",
-    "unsigned_integers",
-    "pointers"
+    "unsigned_integers"
 );
 
 crate::valid_tests!(
