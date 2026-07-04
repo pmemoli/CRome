@@ -115,6 +115,8 @@ pub enum Expr {
     Assignment(Box<Expr>, Box<Expr>, Option<Type>),
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>, Option<Type>),
     FunctionCall(String, Vec<Expr>, Option<Type>),
+    Dereference(Box<Expr>, Option<Type>), // *
+    AddressOf(Box<Expr>, Option<Type>),   // &
 }
 
 // unary_operator = Complement | Negate | Not
@@ -278,83 +280,62 @@ pub fn parse_program(tokens: &mut VecDeque<Token>) -> Program {
 }
 
 // <declaration> ::= <variable-declaration> | <function-declaration>
+// <function-declaration> ::= { <specifier> }+ <declarator> ( <block> | ";")
+// <variable-declaration> ::= { <specifier> }+ <declarator> [ "=" <exp> ] ";"
 pub fn parse_declaration(tokens: &mut VecDeque<Token>) -> Declaration {
     let (ty, storage_class) = parse_type_and_storage_class(tokens);
-    let identifier = parse_identifier(tokens);
+    let declarator = parse_declarator(tokens);
+    let (name, derived_type, param_names) = process_declarator(declarator, ty);
 
-    match peek(tokens) {
-        // <function-declaration> ::= { <specifier> }+ <identifier> "(" <param-list> ")" ( <block> | ";")
-        Token::OpenParenthesis => {
-            expect(Token::OpenParenthesis, tokens);
-            let params = parse_param_list(tokens);
-            expect(Token::CloseParenthesis, tokens);
+    println!(
+        "Parsed declaration: name = {}, derived_type = {:?}, param_names = {:?}",
+        name, derived_type, param_names
+    );
 
-            let param_types: Vec<Type> = params.iter().map(|(ty, _)| ty.clone()).collect();
-            let param_names: Vec<String> = params.iter().map(|(_, name)| name.clone()).collect();
-
-            let fun_type = Type::FunType(param_types, Box::new(ty.clone()));
-
-            match peek(tokens) {
-                Token::OpenBrace => {
-                    let block = parse_block(tokens);
-                    let decl = FunctionDeclaration(
-                        identifier,
-                        param_names,
-                        Some(block),
-                        fun_type,
-                        storage_class,
-                    );
-                    Declaration::FunDecl(decl)
-                }
+    match derived_type {
+        Type::FunType(_, _) => {
+            let body = match peek(tokens) {
+                Token::OpenBrace => Some(parse_block(tokens)),
                 Token::Semicolon => {
                     take_token(tokens);
-                    let decl =
-                        FunctionDeclaration(identifier, param_names, None, fun_type, storage_class);
-                    Declaration::FunDecl(decl)
+                    None
                 }
-                _ => panic!("Expected semicolon or definition after function definition"),
-            }
-        }
+                _ => panic!(
+                    "Syntax Error: Expected function body or ';' but found {:?}",
+                    peek(tokens)
+                ),
+            };
 
-        // <variable-declaration> ::= { <specifier> }+ <identifier> [ "=" <exp> ] ";"
-        Token::Semicolon => {
-            take_token(tokens);
-            let decl = VariableDeclaration(identifier, None, ty, storage_class);
-            Declaration::VarDecl(decl)
+            Declaration::FunDecl(FunctionDeclaration(
+                name,
+                param_names,
+                body,
+                derived_type.clone(),
+                storage_class,
+            ))
         }
-        Token::Equal => {
-            take_token(tokens);
-            let init_expr = parse_expr(tokens, 0);
+        _ => {
+            let init_expr = match peek(tokens) {
+                Token::Semicolon => None,
+                Token::Equal => {
+                    take_token(tokens);
+                    Some(parse_expr(tokens, 0))
+                }
+                _ => panic!(
+                    "Syntax Error: Expected '=' or ';' but found {:?}",
+                    peek(tokens)
+                ),
+            };
             expect(Token::Semicolon, tokens);
-            let decl = VariableDeclaration(identifier, Some(init_expr), ty, storage_class);
-            Declaration::VarDecl(decl)
+
+            Declaration::VarDecl(VariableDeclaration(
+                name,
+                init_expr,
+                derived_type,
+                storage_class,
+            ))
         }
-        _ => panic!("Unable to parse function or variable declaration"),
     }
-}
-
-// <param-list> ::= "void" | { <type-specifier> }+ <identifier> { "," { <type-specifier> }+ <identifier> }
-pub fn parse_param_list(tokens: &mut VecDeque<Token>) -> Vec<(Type, String)> {
-    let mut param_list = Vec::new();
-    match peek(tokens) {
-        t if t.is_type_specifier() => {
-            let (ty, _) = parse_type_and_storage_class(tokens);
-            param_list.push((ty, parse_identifier(tokens)));
-
-            while matches!(peek(tokens), Token::Comma) {
-                take_token(tokens);
-                let (ty, _) = parse_type_and_storage_class(tokens);
-                param_list.push((ty, parse_identifier(tokens)));
-            }
-        }
-        Token::VoidKeyword => {
-            take_token(tokens);
-        }
-        Token::CloseParenthesis => {}
-        _ => panic!("Expected 'void' or parameter list in function declaration"),
-    }
-
-    param_list
 }
 
 // <specifier> ::= <type-specifier> | "static" | "extern"
@@ -432,6 +413,7 @@ pub fn parse_type_from_specifiers(specifier_tokens: &mut Vec<Token>) -> Type {
     }
 }
 
+// parses { <specifier> }+ into a single storage class
 pub fn parse_storage_class_from_specifiers(
     specifier_tokens: &mut Vec<Token>,
 ) -> Option<StorageClass> {
@@ -447,6 +429,119 @@ pub fn parse_storage_class_from_specifiers(
         Some(StorageClass::Extern)
     } else {
         None
+    }
+}
+
+// <declarator> ::= "*" <declarator> | <direct-declarator>
+// <direct-declarator> ::= <simple-declarator> [ <param-list> ]
+// <param-list> ::= "(" "void" ")" | "(" <param> { "," <param> } ")"
+// <param> ::= { <type-specifier> }+ <declarator>
+// <simple-declarator> ::= <identifier> | "(" <declarator> ")"
+enum Declarator {
+    Ident(String),
+    PointerDeclarator(Box<Declarator>),
+    FunDeclarator(Vec<ParamInfo>, Box<Declarator>),
+}
+struct ParamInfo(Type, Declarator);
+
+pub fn parse_declarator(tokens: &mut VecDeque<Token>) -> Declarator {
+    match peek(tokens) {
+        Token::Asterisk => {
+            take_token(tokens);
+            let inner_declarator = parse_declarator(tokens);
+            Declarator::PointerDeclarator(Box::new(inner_declarator))
+        }
+        _ => parse_direct_declarator(tokens),
+    }
+}
+
+pub fn parse_direct_declarator(tokens: &mut VecDeque<Token>) -> Declarator {
+    let simple_declarator = parse_simple_declarator(tokens);
+
+    match peek(tokens) {
+        Token::OpenParenthesis => {
+            take_token(tokens);
+            let params = parse_param_list(tokens);
+            expect(Token::CloseParenthesis, tokens);
+            Declarator::FunDeclarator(params, Box::new(simple_declarator))
+        }
+        _ => simple_declarator,
+    }
+}
+
+pub fn parse_simple_declarator(tokens: &mut VecDeque<Token>) -> Declarator {
+    match peek(tokens) {
+        Token::Identifier(_) => {
+            let ident = parse_identifier(tokens);
+            Declarator::Ident(ident)
+        }
+        Token::OpenParenthesis => {
+            take_token(tokens);
+            let inner_declarator = parse_declarator(tokens);
+            expect(Token::CloseParenthesis, tokens);
+            inner_declarator
+        }
+        _ => panic!("Expected a declarator but found {:?}", peek(tokens)),
+    }
+}
+
+// <param-list> ::= "(" "void" ")" | "(" <param> { "," <param> } ")"
+pub fn parse_param_list(tokens: &mut VecDeque<Token>) -> Vec<ParamInfo> {
+    let mut params = Vec::new();
+
+    match peek(tokens) {
+        Token::CloseParenthesis => return params,
+        Token::VoidKeyword => {
+            take_token(tokens);
+            if !matches!(peek(tokens), Token::CloseParenthesis) {
+                panic!("Expected ')' after 'void' in parameter list");
+            }
+        }
+        t if t.is_type_specifier() => {
+            let (ty, _) = parse_type_and_storage_class(tokens);
+            let declarator = parse_declarator(tokens);
+            params.push(ParamInfo(ty, declarator));
+
+            while matches!(peek(tokens), Token::Comma) {
+                take_token(tokens);
+                let (ty, _) = parse_type_and_storage_class(tokens);
+                let declarator = parse_declarator(tokens);
+                params.push(ParamInfo(ty, declarator));
+            }
+        }
+        _ => panic!(
+            "Expected a parameter or 'void' in parameter list but found {:?}",
+            peek(tokens)
+        ),
+    }
+
+    params
+}
+
+pub fn process_declarator(declarator: Declarator, base_ty: Type) -> (String, Type, Vec<String>) {
+    // returns declarator name, derived type, and parameter names if it's a function
+    match declarator {
+        Declarator::Ident(name) => (name, base_ty, Vec::new()),
+        Declarator::PointerDeclarator(inner) => {
+            let derived_ty = Type::Pointer(Box::new(base_ty));
+            process_declarator(*inner, derived_ty)
+        }
+        Declarator::FunDeclarator(params_info, inner) => match *inner {
+            Declarator::Ident(name) => {
+                let mut param_names = Vec::new();
+                let mut param_types = Vec::new();
+                for ParamInfo(param_ty, param_declarator) in params_info {
+                    let (param_name, derived_param_ty, _) =
+                        process_declarator(param_declarator, param_ty);
+
+                    param_names.push(param_name);
+                    param_types.push(derived_param_ty);
+                }
+                let derived_ty = Type::FunType(param_types, Box::new(base_ty));
+                (name, derived_ty, param_names)
+            }
+            _ => panic!("Function declarator must have an identifier"),
+        },
     }
 }
 
@@ -620,7 +715,7 @@ pub fn parse_optional_expr(
 }
 
 // <factor> ::= <const> | <identifier>
-//     | "(" { <type-specifier> }+ ")" <factor>
+//     | "(" { <type-specifier> }+ [ <abstract-declarator> ] ")" <factor>
 //     | <unop> <factor> | "(" <exp> ")"
 //     | <identifier> "(" [ <argument-list> ] ")"
 pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
@@ -635,13 +730,25 @@ pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
             let inner_expr = parse_factor(tokens);
             Expr::Unary(operator, Box::new(inner_expr), None)
         }
+        Token::Asterisk => {
+            take_token(tokens);
+            let inner_expr = parse_factor(tokens);
+            Expr::Dereference(Box::new(inner_expr), None)
+        }
+        Token::Ampersand => {
+            take_token(tokens);
+            let inner_expr = parse_factor(tokens);
+            Expr::AddressOf(Box::new(inner_expr), None)
+        }
         Token::OpenParenthesis => match peek_n(tokens, 1).is_type_specifier() {
             true => {
                 take_token(tokens);
                 let (ty, _) = parse_type_and_storage_class(tokens);
+                let abstract_declarator = parse_abstract_declarator(tokens);
+                let derived_ty = process_abstract_declarator(abstract_declarator, ty);
                 expect(Token::CloseParenthesis, tokens);
                 let factor = parse_factor(tokens);
-                Expr::Cast(ty, Box::new(factor), None)
+                Expr::Cast(derived_ty, Box::new(factor), None)
             }
             false => {
                 take_token(tokens);
@@ -666,6 +773,52 @@ pub fn parse_factor(tokens: &mut VecDeque<Token>) -> Expr {
             }
         },
         _ => panic!("Malformed Expression"),
+    }
+}
+
+// <abstract-declarator> ::= "*" [ <abstract-declarator> ]
+//     | <direct-abstract-declarator>
+// <direct-abstract-declarator> ::= "(" <abstract-declarator> ")"
+enum AbstractDeclarator {
+    AbstractPointer(Box<AbstractDeclarator>),
+    AbstractBase,
+}
+pub fn parse_abstract_declarator(tokens: &mut VecDeque<Token>) -> Option<AbstractDeclarator> {
+    match peek(tokens) {
+        Token::Asterisk => {
+            take_token(tokens);
+            let inner_declarator = parse_abstract_declarator(tokens);
+            match inner_declarator {
+                Some(inner) => Some(AbstractDeclarator::AbstractPointer(Box::new(inner))),
+                None => Some(AbstractDeclarator::AbstractPointer(Box::new(
+                    AbstractDeclarator::AbstractBase,
+                ))),
+            }
+        }
+        Token::OpenParenthesis => {
+            take_token(tokens);
+            let inner_declarator = parse_abstract_declarator(tokens);
+            expect(Token::CloseParenthesis, tokens);
+            match inner_declarator {
+                Some(inner) => Some(inner),
+                None => Some(AbstractDeclarator::AbstractBase),
+            }
+        }
+        _ => None,
+    }
+}
+
+pub fn process_abstract_declarator(
+    abstract_declarator: Option<AbstractDeclarator>,
+    base_ty: Type,
+) -> Type {
+    match abstract_declarator {
+        Some(AbstractDeclarator::AbstractPointer(inner)) => {
+            let derived_ty = Type::Pointer(Box::new(base_ty));
+            process_abstract_declarator(Some(*inner), derived_ty)
+        }
+        Some(AbstractDeclarator::AbstractBase) => Type::Pointer(Box::new(base_ty)),
+        None => base_ty,
     }
 }
 

@@ -1,4 +1,6 @@
-// type = Int | Long | UInt | ULong | Float | Double | FunType(type* params, type ret)
+// type = Int | Long | UInt | ULong | Double
+//     | FunType(type* params, type ret)
+//     | Pointer(type referenced)
 #[derive(PartialEq, Debug, Clone, Eq, Hash)]
 pub enum Type {
     Int,
@@ -7,6 +9,7 @@ pub enum Type {
     ULong,
     Float,
     Double,
+    Pointer(Box<Type>),
     FunType(Vec<Type>, Box<Type>), // (param_types, return_type)
 }
 
@@ -16,7 +19,7 @@ impl Type {
             Type::Int | Type::UInt | Type::Float => 4,
             Type::Long | Type::ULong => 8,
             Type::Double => 8,
-            Type::FunType(_, _) => panic!("Functions do not have a byte size"),
+            _ => panic!("Type {:?} does not have a defined byte size", self),
         }
     }
 
@@ -24,7 +27,7 @@ impl Type {
         match self {
             Type::Int | Type::Long | Type::Float | Type::Double => true,
             Type::UInt | Type::ULong => false,
-            Type::FunType(_, _) => panic!("Functions do not have signedness"),
+            _ => panic!("Type {:?} does not have a defined signedness", self),
         }
     }
 

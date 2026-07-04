@@ -4,14 +4,6 @@ pointer_int_casts 0
 compare_pointers 0
 compare_to_null 0
 pointers_as_conditions 0
-bitshift_dereferenced_ptrs 0
-bitwise_ops_with_dereferenced_ptrs 0
-compound_assign_conversion 0
-compound_assign_through_pointer 0
-compound_bitwise_dereferenced_ptrs 0
-eval_compound_lhs_once 0
-incr_and_decr_through_pointer 0
-switch_dereferenced_pointer 0
 abstract_declarators 0
 declarators 0
 declare_pointer_in_for_loop 5

@@ -27,7 +27,9 @@ program = Program(declaration*)
 declaration = FunDecl(function_declaration) | VarDecl(variable_declaration)
 variable_declaration = (identifier name, exp? init, type var_type, storage_class?)
 function_declaration = (identifier name, identifier* params, block? body, type fun_type, storage_class?)
-type = Int | Long | UInt | ULong | Float | Double | FunType(type* params, type ret)
+type = Int | Long | UInt | ULong | Double
+    | FunType(type* params, type ret)
+    | Pointer(type referenced)
 storage_class = Static | Extern
 block = Block(block_item*)
 block_item = S(statement) | D(declaration)
@@ -50,6 +52,8 @@ exp = Constant(const)
     | Assignment(exp, exp)
     | Conditional(exp condition, exp, exp)
     | FunctionCall(identifier, exp* args)
+    | Dereference(exp)
+    | AddrOf(exp)
 unary_operator = Complement | Negate | Not
 binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
     | Equal | NotEqual | LessThan | LessOrEqual
@@ -65,11 +69,14 @@ Loop related statements are annotated in the semantic analysis pass.
 ```
 <program> ::= { <declaration> }
 <declaration> ::= <variable-declaration> | <function-declaration>
-<variable-declaration> ::= { <specifier> }+ <identifier> [ "=" <exp> ] ";"
-<function-declaration> ::= { <specifier> }+ <identifier> "(" <param-list> ")" ( <block> | ";")
-<param-list> ::= "void"
-    | { <type-specifier> }+ <identifier> { "," { <type-specifier> }+ <identifier> }
-<type-specifier> ::= "int" | "long" | "unsigned" | "signed" | "double" | "float"
+<variable-declaration> ::= { <specifier> }+ <declarator> [ "=" <exp> ] ";"
+<function-declaration> ::= { <specifier> }+ <declarator> ( <block> | ";")
+<declarator> ::= "*" <declarator> | <direct-declarator>
+<direct-declarator> ::= <simple-declarator> [ <param-list> ]
+<param-list> ::= "(" "void" ")" | "(" <param> { "," <param> } ")"
+<param> ::= { <type-specifier> }+ <declarator>
+<simple-declarator> ::= <identifier> | "(" <declarator> ")"
+<type-specifier> ::= "int" | "long" | "unsigned" | "signed" | "double"
 <specifier> ::= <type-specifier> | "static" | "extern"
 <block> ::= "{" { <block-item> } "}"
 <block-item> ::= <statement> | <declaration>
@@ -86,21 +93,23 @@ Loop related statements are annotated in the semantic analysis pass.
     | ";"
 <exp> ::= <factor> | <exp> <binop> <exp> | <exp> "?" <exp> ":" <exp>
 <factor> ::= <const> | <identifier>
-    | "(" { <type-specifier> }+ ")" <factor>
+    | "(" { <type-specifier> }+ [ <abstract-declarator> ] ")" <factor>
     | <unop> <factor> | "(" <exp> ")"
     | <identifier> "(" [ <argument-list> ] ")"
 <argument-list> ::= <exp> { "," <exp> }
-<unop> ::= "-" | "~" | "!"
+<abstract-declarator> ::= "*" [ <abstract-declarator> ]
+    | <direct-abstract-declarator>
+<direct-abstract-declarator> ::= "(" <abstract-declarator> ")"
+<unop> ::= "-" | "~" | "!" | "*" | "&"
 <binop> ::= "-" | "+" | "*" | "/" | "%" | "&&" | "||"
     | "==" | "!=" | "<" | "<=" | ">" | ">=" | "="
-<const> ::= <int> | <long> | <uint> | <ulong> | <float> | <double>
+<const> ::= <int> | <long> | <uint> | <ulong> | <double>
 <identifier> ::= ? An identifier token ?
 <int> ::= ? An int token ?
 <long> ::= ? An int or long token ?
 <uint> ::= ? An unsigned int token ?
 <ulong> ::= ? An unsigned int or unsigned long token ?
-<double> ::= ? A floating-point constant token ?
-```
+<double> ::= ? A floating-point constant token ?```
 
 ## Semantic Analysis
 

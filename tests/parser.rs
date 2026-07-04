@@ -16,7 +16,8 @@ crate::invalid_tests!(
     "linkage",
     "longs",
     "unsigned_integers",
-    "doubles"
+    "doubles",
+    "pointers"
 );
 
 crate::valid_tests!(
@@ -34,5 +35,6 @@ crate::valid_tests!(
     "linkage",
     "longs",
     "unsigned_integers",
-    "doubles"
+    "doubles",
+    "pointers"
 );
