@@ -10,6 +10,7 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS) with it.
 
 Currently in chapter 14 / 20, finished part 1.
 
+- Break up parser into multiple files.
 - Chapter 14
 - Refactor instruction fixup, its horrendous
 
