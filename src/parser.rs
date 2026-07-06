@@ -119,6 +119,12 @@ pub enum Expr {
     AddressOf(Box<Expr>, Option<Type>),   // &
 }
 
+impl Expr {
+    pub fn is_lvalue(&self) -> bool {
+        matches!(self, Expr::Var(_, _) | Expr::Dereference(_, _))
+    }
+}
+
 // unary_operator = Complement | Negate | Not
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnaryOperator {
@@ -554,24 +560,6 @@ mod parse_declarator_tests {
 
         assert_eq!(parsed_declaration, expected_declaration);
     }
-
-    #[test]
-    fn function_declarator_derived_type() {
-        let declaration_str = "foo(int bar, float baz);";
-        let tokens = crate::lexer::lexical_analysis(declaration_str);
-        let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-        let parsed_declarator = parse_declarator(&mut token_queue);
-
-        let base_type = Type::Int;
-        let (name, derived_type, param_names) = process_declarator(parsed_declarator, base_type);
-
-        assert_eq!(name, "foo");
-        assert_eq!(
-            derived_type,
-            Type::FunType(vec![Type::Int, Type::Float], Box::new(Type::Int))
-        );
-        assert_eq!(param_names, vec!["bar", "baz"]);
-    }
 }
 
 pub fn parse_direct_declarator(tokens: &mut VecDeque<Token>) -> Declarator {
@@ -684,6 +672,24 @@ mod process_declarator_tests {
             Type::Pointer(Box::new(Type::Pointer(Box::new(Type::Int))))
         );
         assert_eq!(param_names.len(), 0);
+    }
+
+    #[test]
+    fn function_declarator_derived_type() {
+        let declaration_str = "foo(int bar, float baz);";
+        let tokens = crate::lexer::lexical_analysis(declaration_str);
+        let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
+        let parsed_declarator = parse_declarator(&mut token_queue);
+
+        let base_type = Type::Int;
+        let (name, derived_type, param_names) = process_declarator(parsed_declarator, base_type);
+
+        assert_eq!(name, "foo");
+        assert_eq!(
+            derived_type,
+            Type::FunType(vec![Type::Int, Type::Float], Box::new(Type::Int))
+        );
+        assert_eq!(param_names, vec!["bar", "baz"]);
     }
 }
 

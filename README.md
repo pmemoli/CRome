@@ -10,12 +10,14 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS) with it.
 
 Currently in chapter 14 / 20, finished part 1.
 
-- Break up parser into multiple files.
-- Chapter 14
+- Chapter 14 Semantic Analysis.
+- Unit test non-glue functions and document C specification in parallel 
+    (I should have done this from the start... Better late than never xdxdxd). 
 - Refactor instruction fixup, its horrendous
 
 Backlog:
 
+- Break up parser into multiple files.
 - Proper error reporting, currently it just panics and unwraps everything xdxd
 - Bitwise operators
 - Nans
@@ -143,7 +145,6 @@ Tables from Writing a C Compiler, Pages 216-217.
 #### Variables:
 
 1. Rename each non-linked variable name to a unique one.
-2. Check that variable assignments have valid left expressions (Var(String))
 3. Check that all variables in expressions are declared
 4. Check that local variables are not redeclared in the current scope
 

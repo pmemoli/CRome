@@ -42,4 +42,12 @@ impl Type {
     pub fn is_floating_point(&self) -> bool {
         matches!(self, Type::Double | Type::Float)
     }
+
+    pub fn is_arithmetic(&self) -> bool {
+        self.is_integer() || self.is_floating_point()
+    }
+
+    pub fn is_pointer(&self) -> bool {
+        matches!(self, Type::Pointer(_))
+    }
 }

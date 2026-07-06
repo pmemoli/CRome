@@ -1,5 +1,4 @@
 use super::*;
-use ordered_float::OrderedFloat;
 
 // Frontend Symbol Table
 #[derive(Debug, Clone)]

@@ -7,8 +7,7 @@ use super::*;
 // Variables:
 
 // 1. Rename each non-linked variable name to a unique one.
-// 2. Check that variable assignments have valid left expressions (Var(String))
-// 3. Check that all variables in expressions are declared
+// 2. Check that all variables in expressions are declared
 
 // Functions:
 
@@ -359,10 +358,6 @@ pub fn resolve_expr(expr: &parser::Expr, identifier_map: &mut IdentifierMap) -> 
             let left = left.as_ref();
             let right = right.as_ref();
 
-            if !matches!(left, parser::Expr::Var(_, _)) {
-                panic!("Invalid lvalue!");
-            }
-
             parser::Expr::Assignment(
                 Box::new(resolve_expr(left, identifier_map)),
                 Box::new(resolve_expr(right, identifier_map)),
@@ -426,6 +421,14 @@ pub fn resolve_expr(expr: &parser::Expr, identifier_map: &mut IdentifierMap) -> 
                 Box::new(resolve_expr(expr, identifier_map)),
                 ty.clone(),
             )
+        }
+        parser::Expr::AddressOf(expr, ty) => {
+            let expr = expr.as_ref();
+            parser::Expr::AddressOf(Box::new(resolve_expr(expr, identifier_map)), ty.clone())
+        }
+        parser::Expr::Dereference(expr, ty) => {
+            let expr = expr.as_ref();
+            parser::Expr::Dereference(Box::new(resolve_expr(expr, identifier_map)), ty.clone())
         }
         other => other.clone(),
     }

@@ -21,6 +21,8 @@ pub fn get_type(expr: &parser::Expr) -> Type {
         | parser::Expr::Binary(_, _, _, Some(ty))
         | parser::Expr::Conditional(_, _, _, Some(ty))
         | parser::Expr::Cast(_, _, Some(ty))
+        | parser::Expr::AddressOf(_, Some(ty))
+        | parser::Expr::Dereference(_, Some(ty))
         | parser::Expr::Constant(_, Some(ty)) => ty.clone(),
         _ => panic!("Expression without type annotation"),
     }

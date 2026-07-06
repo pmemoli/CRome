@@ -22,7 +22,9 @@ use crate::{
 
 // 1. Annotate the AST with the type of each expression.
 // 2. Cast sub expressions in binary expressions to the common type if possible
-// 3. Cast the expression to the declaration type if possible
+// 3. Cast the expression to the declaration/assignment type if possible
+// 4. Raise error when operating with invalid types (like multiyplying pointers)
+// 5. Not using an lvalue where one is required (such as the left side of an assignment)
 
 // Symbol Table
 
@@ -117,7 +119,9 @@ pub fn typecheck_block_scope_variable_declaration(
 
             // Cast the typed init to the variable type if it exists
             let typed_init = init.as_ref().map(|e| typecheck_expr(e, symbol_table));
-            typed_init.as_ref().map(|e| convert_to(e, ty.clone()))
+            typed_init
+                .as_ref()
+                .map(|e| convert_by_assignment(e, ty.clone()))
         }
     };
 
@@ -175,6 +179,20 @@ pub fn static_convert_constant_expr(expr: &parser::Expr, ty: &Type) -> parser::E
             ConstVal::Integer(i) => i as f32,
             ConstVal::Float(f) => f as f32,
         }),
+        Type::Pointer(_) => match val {
+            ConstVal::Integer(i) => {
+                if i == 0 {
+                    parser::Const::ConstULong(0)
+                } else {
+                    panic!(
+                        "Type Error: Non-null pointer constant used to initialize static variable"
+                    )
+                }
+            }
+            ConstVal::Float(_) => {
+                panic!("Type Error: Floating point constant used to initialize pointer")
+            }
+        },
         _ => panic!("Unsupported type for static variable initialization"),
     };
 
@@ -362,7 +380,7 @@ pub fn typecheck_statement(
         parser::Statement::Return(expr) => {
             if let Some(enclosing_func_ty) = enclosing_func_ty {
                 let typed_expr = typecheck_expr(expr, symbol_table);
-                let converted_expr = convert_to(&typed_expr, enclosing_func_ty.clone());
+                let converted_expr = convert_by_assignment(&typed_expr, enclosing_func_ty.clone());
                 parser::Statement::Return(converted_expr)
             } else {
                 panic!("Return statement not inside a function")
@@ -456,7 +474,7 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
                     let mut typed_arguments = Vec::new();
                     for (arg, param_ty) in arguments.iter().zip(param_types.iter()) {
                         let typed_arg = typecheck_expr(arg, symbol_table);
-                        let converted_arg = convert_to(&typed_arg, param_ty.clone());
+                        let converted_arg = convert_by_assignment(&typed_arg, param_ty.clone());
                         typed_arguments.push(converted_arg);
                     }
 
@@ -484,7 +502,7 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
             let typed_right = typecheck_expr(right.as_ref(), symbol_table);
             let left_ty = get_type(&typed_left);
 
-            let converted_right = convert_to(&typed_right, left_ty.clone());
+            let converted_right = convert_by_assignment(&typed_right, left_ty.clone());
 
             let new_expr =
                 parser::Expr::Assignment(Box::new(typed_left), Box::new(converted_right), None);
@@ -494,32 +512,57 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
 
         parser::Expr::Unary(op, inner, _) => {
             let typed_inner = typecheck_expr(inner.as_ref(), symbol_table);
-
-            if matches!(op, UnaryOperator::Complement) && get_type(&typed_inner).is_floating_point()
-            {
-                panic!("Can't take the bitwise complement of a float");
-            }
-
-            let new_expr = parser::Expr::Unary(op.clone(), Box::new(typed_inner.clone()), None);
+            let inner_ty = get_type(&typed_inner);
 
             match op {
-                parser::UnaryOperator::Not => set_type(&new_expr.clone(), Type::Int),
-                _ => set_type(&new_expr.clone(), get_type(&typed_inner)),
+                UnaryOperator::Complement | UnaryOperator::Negate => {
+                    if inner_ty.is_floating_point() {
+                        panic!("Can't take the bitwise complement of a float");
+                    };
+
+                    if inner_ty.is_pointer() {
+                        panic!("Can't take the bitwise complement of a pointer");
+                    };
+
+                    let new_expr =
+                        parser::Expr::Unary(op.clone(), Box::new(typed_inner.clone()), None);
+                    set_type(&new_expr, inner_ty)
+                }
+                UnaryOperator::Not => {
+                    let new_expr =
+                        parser::Expr::Unary(op.clone(), Box::new(typed_inner.clone()), None);
+                    set_type(&new_expr, Type::Int)
+                }
             }
         }
 
         parser::Expr::Binary(op, left, right, _) => {
             let typed_left = typecheck_expr(left.as_ref(), symbol_table);
+            let left_ty = get_type(&typed_left);
             let typed_right = typecheck_expr(right.as_ref(), symbol_table);
+            let right_ty = get_type(&typed_right);
 
-            let common_ty = get_common_type(&typed_left, &typed_right);
+            let common_ty = if left_ty.is_pointer() || right_ty.is_pointer() {
+                get_common_pointer_type(&typed_left, &typed_right)
+            } else {
+                get_common_type(&typed_left, &typed_right)
+            };
 
+            // Invalid operations
             if matches!(op, BinaryOperator::Remainder) && common_ty.is_floating_point() {
-                panic!("Can't take the remainder of a float");
+                panic!("Type Error: Can't take the remainder of a float");
+            }
+
+            if matches!(
+                op,
+                BinaryOperator::Divide | BinaryOperator::Multiply | BinaryOperator::Remainder
+            ) && common_ty.is_pointer()
+            {
+                panic!("Type Error: Can't multiply, divide or take the remainder of a pointer");
             }
 
             match op {
-                // Logical operators always return int
+                // Logical operators always return int and don't cast their operators
                 parser::BinaryOperator::And | parser::BinaryOperator::Or => {
                     let new_expr = parser::Expr::Binary(
                         op.clone(),
@@ -583,8 +626,39 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
         },
         parser::Expr::Cast(ty, inner, _) => {
             let typed_inner = typecheck_expr(inner.as_ref(), symbol_table);
+            let inner_ty = get_type(&typed_inner);
+
+            if ty.is_floating_point() && inner_ty.is_pointer() {
+                panic!("Cannot cast pointer to floating point type");
+            }
+            if ty.is_pointer() && inner_ty.is_floating_point() {
+                panic!("Cannot cast floating point type to pointer");
+            }
+
             let new_expr = parser::Expr::Cast(ty.clone(), Box::new(typed_inner), None);
             set_type(&new_expr, ty.clone())
+        }
+        parser::Expr::Dereference(inner, _) => {
+            let typed_inner = typecheck_expr(inner.as_ref(), symbol_table);
+            match get_type(&typed_inner) {
+                Type::Pointer(inner_ty) => set_type(
+                    &parser::Expr::Dereference(Box::new(typed_inner), None),
+                    *inner_ty,
+                ),
+                _ => panic!("Type error: Dereference operator can only be applied to pointers"),
+            }
+        }
+        parser::Expr::AddressOf(inner, _) => {
+            let inner_expr = inner.as_ref();
+
+            if inner_expr.is_lvalue() {
+                let typed_inner = typecheck_expr(inner_expr, symbol_table);
+                let inner_ty = get_type(&typed_inner);
+                let new_expr = parser::Expr::AddressOf(Box::new(typed_inner), None);
+                set_type(&new_expr, Type::Pointer(Box::new(inner_ty)))
+            } else {
+                panic!("Type error: Address-of operator can only be applied to lvalues")
+            }
         }
     }
 }
@@ -601,6 +675,8 @@ pub fn set_type(expr: &parser::Expr, ty: Type) -> parser::Expr {
         | parser::Expr::Binary(_, _, _, t)
         | parser::Expr::Conditional(_, _, _, t)
         | parser::Expr::Cast(_, _, t)
+        | parser::Expr::AddressOf(_, t)
+        | parser::Expr::Dereference(_, t)
         | parser::Expr::Constant(_, t) => *t = some_ty,
     };
 
@@ -630,6 +706,31 @@ pub fn get_common_type(left: &parser::Expr, right: &parser::Expr) -> Type {
     }
 }
 
+pub fn get_common_pointer_type(left: &parser::Expr, right: &parser::Expr) -> Type {
+    let left_ty = get_type(left);
+    let right_ty = get_type(right);
+
+    if left_ty == right_ty {
+        left_ty
+    } else if is_null_pointer_constant(left) {
+        right_ty
+    } else if is_null_pointer_constant(right) {
+        left_ty
+    } else {
+        panic!("Type error: Pointer arithmetic with incompatible pointer types");
+    }
+}
+
+pub fn is_null_pointer_constant(expr: &parser::Expr) -> bool {
+    match expr {
+        parser::Expr::Constant(parser::Const::ConstInt(0), _) => true,
+        parser::Expr::Constant(parser::Const::ConstLong(0), _) => true,
+        parser::Expr::Constant(parser::Const::ConstUInt(0), _) => true,
+        parser::Expr::Constant(parser::Const::ConstULong(0), _) => true,
+        _ => false,
+    }
+}
+
 pub fn convert_to(expr: &parser::Expr, target_ty: Type) -> parser::Expr {
     if get_type(expr) == target_ty {
         return expr.clone();
@@ -637,4 +738,23 @@ pub fn convert_to(expr: &parser::Expr, target_ty: Type) -> parser::Expr {
 
     let cast_expr = parser::Expr::Cast(target_ty.clone(), Box::new(expr.clone()), None);
     set_type(&cast_expr, target_ty)
+}
+
+pub fn convert_by_assignment(expr: &parser::Expr, target_ty: Type) -> parser::Expr {
+    let e_ty = get_type(expr);
+
+    if e_ty == target_ty {
+        expr.clone()
+    } else if e_ty.is_arithmetic() && target_ty.is_arithmetic() {
+        convert_to(expr, target_ty)
+    } else if e_ty.is_pointer() && target_ty.is_pointer() {
+        convert_to(expr, target_ty)
+    } else if is_null_pointer_constant(expr) && target_ty.is_pointer() {
+        convert_to(expr, target_ty)
+    } else {
+        panic!(
+            "Type error: Cannot assign expression of type {:?} to variable of type {:?}",
+            e_ty, target_ty
+        );
+    }
 }
