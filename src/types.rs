@@ -19,6 +19,7 @@ impl Type {
             Type::Int | Type::UInt | Type::Float => 4,
             Type::Long | Type::ULong => 8,
             Type::Double => 8,
+            Type::Pointer(_) => 8, // 64 bit architecture
             _ => panic!("Type {:?} does not have a defined byte size", self),
         }
     }

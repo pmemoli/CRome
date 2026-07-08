@@ -1,10 +1,5 @@
 use super::*;
 
-// Second pass (Loop Annotation):
-
-// 1. Annotate loop nodes in the ast with a unique identifier for each corresponding loop
-// 2. Check that break and continue statements live within loops
-
 pub fn label_program(program: &parser::Program) -> parser::Program {
     let mut loop_idx = 0;
     let current_label = None;

@@ -5,32 +5,6 @@ use crate::{
     symbol::{InitialValue, StaticInit, SymbolMetadata},
 };
 
-// Third pass (Type Checking):
-
-// Functions
-
-// 1. Check that function declaration types and linkage are consistent everywhere
-// 2. A function can't be defined more than once (not really type checking but easy to implement here)
-// 3. A function can't be called with the wrong number of arguments
-
-// Variables
-
-// 1. Check that an initialized file scope value is only init with a constant expression
-// 2. Check that declarations have consistent types (equal or coercible)
-
-// Types (annotate, validate and coerce)
-
-// 1. Annotate the AST with the type of each expression.
-// 2. Cast sub expressions in binary expressions to the common type if possible
-// 3. Cast the expression to the declaration/assignment type if possible
-// 4. Raise error when operating with invalid types (like multiyplying pointers)
-// 5. Not using an lvalue where one is required (such as the left side of an assignment)
-
-// Symbol Table
-
-// It also fills the symbol table with variable and function type, definition, storage duration and
-// linkage information
-
 pub fn typecheck_program(
     program: &parser::Program,
     symbol_table: &mut SymbolTable,
@@ -498,6 +472,10 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
         }
 
         parser::Expr::Assignment(left, right, _) => {
+            if !left.is_lvalue() {
+                panic!("Type Error: Left expression in assignment is not an lvalue")
+            }
+
             let typed_left = typecheck_expr(left.as_ref(), symbol_table);
             let typed_right = typecheck_expr(right.as_ref(), symbol_table);
             let left_ty = get_type(&typed_left);
@@ -514,16 +492,20 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
             let typed_inner = typecheck_expr(inner.as_ref(), symbol_table);
             let inner_ty = get_type(&typed_inner);
 
+            if inner_ty.is_pointer()
+                && matches!(op, UnaryOperator::Negate | UnaryOperator::Complement)
+            {
+                panic!(
+                    "Type Error: can't take the negation or bitwise complement of a pointer type"
+                );
+            }
+
+            if inner_ty.is_floating_point() && matches!(op, UnaryOperator::Complement) {
+                panic!("Type Error: can't take the bitwise complement of a floating point type");
+            }
+
             match op {
                 UnaryOperator::Complement | UnaryOperator::Negate => {
-                    if inner_ty.is_floating_point() {
-                        panic!("Can't take the bitwise complement of a float");
-                    };
-
-                    if inner_ty.is_pointer() {
-                        panic!("Can't take the bitwise complement of a pointer");
-                    };
-
                     let new_expr =
                         parser::Expr::Unary(op.clone(), Box::new(typed_inner.clone()), None);
                     set_type(&new_expr, inner_ty)
@@ -542,21 +524,17 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
             let typed_right = typecheck_expr(right.as_ref(), symbol_table);
             let right_ty = get_type(&typed_right);
 
-            let common_ty = if left_ty.is_pointer() || right_ty.is_pointer() {
-                get_common_pointer_type(&typed_left, &typed_right)
-            } else {
-                get_common_type(&typed_left, &typed_right)
-            };
-
             // Invalid operations
-            if matches!(op, BinaryOperator::Remainder) && common_ty.is_floating_point() {
+            if matches!(op, BinaryOperator::Remainder)
+                && (left_ty.is_floating_point() || right_ty.is_floating_point())
+            {
                 panic!("Type Error: Can't take the remainder of a float");
             }
 
             if matches!(
                 op,
                 BinaryOperator::Divide | BinaryOperator::Multiply | BinaryOperator::Remainder
-            ) && common_ty.is_pointer()
+            ) && (left_ty.is_pointer() || right_ty.is_pointer())
             {
                 panic!("Type Error: Can't multiply, divide or take the remainder of a pointer");
             }
@@ -573,6 +551,12 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
                     set_type(&new_expr, Type::Int)
                 }
                 _ => {
+                    let common_ty = if left_ty.is_pointer() || right_ty.is_pointer() {
+                        get_common_pointer_type(&typed_left, &typed_right)
+                    } else {
+                        get_common_type(&typed_left, &typed_right)
+                    };
+
                     let cast_left = convert_to(&typed_left, common_ty.clone());
                     let cast_right = convert_to(&typed_right, common_ty.clone());
                     let new_expr = parser::Expr::Binary(
@@ -746,8 +730,6 @@ pub fn convert_by_assignment(expr: &parser::Expr, target_ty: Type) -> parser::Ex
     if e_ty == target_ty {
         expr.clone()
     } else if e_ty.is_arithmetic() && target_ty.is_arithmetic() {
-        convert_to(expr, target_ty)
-    } else if e_ty.is_pointer() && target_ty.is_pointer() {
         convert_to(expr, target_ty)
     } else if is_null_pointer_constant(expr) && target_ty.is_pointer() {
         convert_to(expr, target_ty)

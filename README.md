@@ -10,9 +10,8 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS) with it.
 
 Currently in chapter 14 / 20, finished part 1.
 
-- Chapter 14 Semantic Analysis.
-- Unit test non-glue functions and document C specification in parallel 
-    (I should have done this from the start... Better late than never xdxdxd). 
+- Chapter 14 tacky.
+- Document C specification & implementation better in the README. 
 - Refactor instruction fixup, its horrendous
 
 Backlog:
@@ -164,7 +163,7 @@ And the base type is computed by:
 
 ### Abstract Declarator Parsing in Casts
 
-TODO
+When casting, the target type in the AST node is derived from the abstract declarator (declarator w/o identifier) with the same rules as the normal declarators.
 
 ## Semantic Analysis
 
@@ -197,8 +196,8 @@ Tables from Writing a C Compiler, Pages 216-217.
 #### Variables:
 
 1. Rename each non-linked variable name to a unique one.
-3. Check that all variables in expressions are declared
-4. Check that local variables are not redeclared in the current scope
+2. Check that all variables in expressions are declared
+3. Check that local variables are not redeclared in the current scope
 
 #### Functions:
 
@@ -207,7 +206,7 @@ Tables from Writing a C Compiler, Pages 216-217.
 
 #### Both
 
-Check that identifier declarations do not contradict in having or not having linkage
+Check that identifier declarations do not contradict in having or not having linkage (see table)
 
 ### Second pass (Loop Annotation):
 
@@ -216,10 +215,36 @@ Check that identifier declarations do not contradict in having or not having lin
 
 ### Third pass (Type Checking):
 
-1. Check that function declarations are consistent everywhere, and adds name to symbol table
-2. A function can't be called with the wrong number of arguments
-3. A function can't be defined more than once (not really type checking but easy to implement here)
-4. Annotate the AST with the type of each expression, and insert corresponding casts where necessary.
+#### Functions
+
+1. Check that function declaration types and linkage are consistent everywhere (see table)
+2. A function can't be defined more than once (not really type checking but easy to implement here)
+3. A function can't be called with the wrong number of arguments
+
+#### Variables
+
+1. Check that an initialized file scope value is only init with a constant expression
+2. Check that declarations have consistent types (equal or coercible)
+
+#### Types (annotate, validate and coerce)
+
+1. Annotate the AST with the type of each expression.
+
+2. Cast sub expressions in binary expressions to the common type when needed possible
+    - Specify this properly
+
+3. Cast the expression to the declaration/assignment type if possible (convert by assignment)
+    - Specify this properly
+
+4. Raise error when operating with invalid types (like multiyplying pointers)
+    - Specify this properly
+
+5. Not using an lvalue where one is required (such as the left side of an assignment)
+    - Specify this properly
+
+#### Symbol Table
+
+It also fills the symbol table with variable and function type, definition, storage duration and linkage information
 
 ## TACKY Grammar
 ```

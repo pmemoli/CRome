@@ -2,20 +2,6 @@ use std::collections::HashMap;
 
 use super::*;
 
-// First pass: Identifier resolution
-
-// Variables:
-
-// 1. Rename each non-linked variable name to a unique one.
-// 2. Check that all variables in expressions are declared
-
-// Functions:
-
-// 1. Check that all function calls refer to declared identifiers
-// 2. Check that definitions of functions do not live within blocks
-
-// AND: Check that identifier declarations do not contradict in having or not having linkage
-
 // We use a declared identifier map for this
 #[derive(Debug, Clone)]
 pub struct IdentifierInfo {
