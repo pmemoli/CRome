@@ -24,7 +24,9 @@ Backlog:
 
 ## Lexer
 
-## AST Specification
+## Parser
+
+### AST Specification 
 ```
 program = Program(declaration*)
 declaration = FunDecl(function_declaration) | VarDecl(variable_declaration)
@@ -68,7 +70,7 @@ const = ConstInt(int) | ConstLong(int)
 
 Loop related statements are annotated in the semantic analysis pass.
 
-## Formal Grammar
+### Formal Grammar
 ```
 <program> ::= { <declaration> }
 <declaration> ::= <variable-declaration> | <function-declaration>
@@ -113,6 +115,56 @@ Loop related statements are annotated in the semantic analysis pass.
 <uint> ::= ? An unsigned int token ?
 <ulong> ::= ? An unsigned int or unsigned long token ?
 <double> ::= ? A floating-point constant token ?```
+
+Most of the parser is implemented through recursive descent with some details:
+
+### Precedence and associativity of operators
+
+Binary operator precedence and associativity is enforced by *precedence climbing*, since the grammar above is ambiguous for binary expressions.   
+
+- **Right Associative binary operators**: Ternary expressions (?) and assignment (=).
+- **Left Associative binary operators**: All the rest
+
+And precedence for binops follows (from highest to lowest):
+
+- Assignment (=)
+- Ternary (?)
+- Multiplicative (*, /, %)
+- Additive (+, -)
+- Relational (<, <=, >, >=)
+- Equality (==, !=)
+- Logical AND (&&)
+- Logical OR (||)
+
+Unary operators are factors (indivisible) and right associative. This is enforced by the grammar.
+
+### Declaration Parsing
+
+Function or variable declarations consist of a list of specificers, a declarator and an optional init or function body. 
+
+Storage class and type is annotated in the parser based on the specifiers and declarators:
+
+**specifiers** determine the *base type* and the *storage class*. They must respect the following syntax rules:
+
+- Specifiers can't be repeated
+- At most 1 storage class specifier can exist
+- Doubles/Floats can't be combined with other types
+
+And the base type is computed by:
+
+- unsigned + int/long -> uint/ulong
+- int + long -> long/ulong
+- if there is only 1 type specifier -> that type
+
+**declarators** determine the identifier and the sequence of derivations to be applied to the basic type:
+
+- identifier -> base-type
+- *(sub-declarator) -> pointer(type(sub-declarator))
+- fun(ty1 a1, ...) -> (derived ty1, ...) -> base-type
+
+### Abstract Declarator Parsing in Casts
+
+TODO
 
 ## Semantic Analysis
 
@@ -286,9 +338,9 @@ Automatic storage duration objects are allocated on the stack at runtime.
 
 ## Testing
 
-Most of the tests come from Nora Sandler's test suite from the book "Writing a C Compiler". 
+Most of the integration tests come from Nora Sandler's test suite from the book "Writing a C Compiler". 
 
-Additional type implementations were tested by checking:
+Additional feature tests were tested by checking:
 
 ### Invalid programs (Lexer, Parser and Semantic Analysis)
 
@@ -296,7 +348,7 @@ Invalid c programs where the corresponding pass of the frontend should panic:
 
 - Lexical errors from unexpected tokens, where the lexer should panic
 - Syntax errors where the parser should panic
-- Semantic errors where the semantic analysis pass should panic
+- Semantic/Type errors where the semantic analysis pass should panic
 
 These reside in tests/source/{feature}/invalid as single files.
 

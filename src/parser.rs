@@ -822,9 +822,12 @@ pub fn parse_for_init(tokens: &mut VecDeque<Token>) -> ForInit {
 
 // <exp> ::= <factor> | <exp> <binop> <exp>
 pub fn parse_expr(tokens: &mut VecDeque<Token>, min_prec: i32) -> Expr {
+    // implemented with precedence climbing
     let mut left_expr = parse_factor(tokens);
     let mut next_token = peek(tokens).clone();
+
     while next_token.is_binop() && next_token.precedence() >= min_prec {
+        // Right associative
         if next_token == Token::Equal {
             take_token(tokens);
             let right_expr = parse_expr(tokens, next_token.precedence());
@@ -840,6 +843,7 @@ pub fn parse_expr(tokens: &mut VecDeque<Token>, min_prec: i32) -> Expr {
                 Box::new(right_expr),
                 None,
             );
+        // Left associative
         } else {
             let operator = parse_binop(tokens);
             let right_expr = parse_expr(tokens, next_token.precedence() + 1);
@@ -909,24 +913,43 @@ mod parse_expr_tests {
     }
 
     #[test]
-    fn conditional_expression() {
-        let expr_str = "x ? y - 1 : z * 1;";
+    fn right_conditional_assignment_expression() {
+        // Needs to enforce right and left associativity when corresponds
+        let expr_str = "x ? y - 1 : z * 1 ? 4 + 1 : 1 = l = 2;";
         let tokens = crate::lexer::lexical_analysis(expr_str);
         let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
         let parsed_expr = parse_expr(&mut token_queue, 0);
 
-        let expected_expr = Expr::Conditional(
-            Box::new(Expr::Var("x".to_string(), None)),
-            Box::new(Expr::Binary(
-                BinaryOperator::Subtract,
-                Box::new(Expr::Var("y".to_string(), None)),
-                Box::new(Expr::Constant(Const::ConstInt(1), None)),
+        let expected_expr = Expr::Assignment(
+            Box::new(Expr::Conditional(
+                Box::new(Expr::Var("x".to_string(), None)),
+                Box::new(Expr::Binary(
+                    BinaryOperator::Subtract,
+                    Box::new(Expr::Var("y".to_string(), None)),
+                    Box::new(Expr::Constant(Const::ConstInt(1), None)),
+                    None,
+                )),
+                Box::new(Expr::Conditional(
+                    Box::new(Expr::Binary(
+                        BinaryOperator::Multiply,
+                        Box::new(Expr::Var("z".to_string(), None)),
+                        Box::new(Expr::Constant(Const::ConstInt(1), None)),
+                        None,
+                    )),
+                    Box::new(Expr::Binary(
+                        BinaryOperator::Add,
+                        Box::new(Expr::Constant(Const::ConstInt(4), None)),
+                        Box::new(Expr::Constant(Const::ConstInt(1), None)),
+                        None,
+                    )),
+                    Box::new(Expr::Constant(Const::ConstInt(1), None)),
+                    None,
+                )),
                 None,
             )),
-            Box::new(Expr::Binary(
-                BinaryOperator::Multiply,
-                Box::new(Expr::Var("z".to_string(), None)),
-                Box::new(Expr::Constant(Const::ConstInt(1), None)),
+            Box::new(Expr::Assignment(
+                Box::new(Expr::Var("l".to_string(), None)),
+                Box::new(Expr::Constant(Const::ConstInt(2), None)),
                 None,
             )),
             None,
