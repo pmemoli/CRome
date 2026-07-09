@@ -2,7 +2,7 @@
 
 C compiler written in Rust based on Sandler Nora's book "Writing a C Compiler". 
 
-The project is just the compiler, cpp is the preprocessor, as as the assembler and ld as the linker. 
+The project is just the compiler, cpp is the preprocessor, as is the assembler and ld as the linker. 
 
 The final goal is writing and compiling a simple xv6-like OS (RomeOS) with it.  
 
@@ -113,7 +113,8 @@ Loop related statements are annotated in the semantic analysis pass.
 <long> ::= ? An int or long token ?
 <uint> ::= ? An unsigned int token ?
 <ulong> ::= ? An unsigned int or unsigned long token ?
-<double> ::= ? A floating-point constant token ?```
+<double> ::= ? A floating-point constant token ?
+```
 
 Most of the parser is implemented through recursive descent with some details:
 
@@ -275,10 +276,19 @@ This is applied on declarations, assignments, return expressions and parameter e
     - Divide, Multiply and Remainder don't work with pointers
     - Remainder doesn't work with floating point expressions 
 
+- Unops:
+    - Negate (-) and complement (~) can't be applied to pointers
+    - Complement (~) can't be applied to floats/doubles
+
+- Dereference (*):
+    - Needs a pointer type.
+
 5. Not using an lvalue where one is required:
 
 - left = right needs left to be an lvalue expression
 - & needs an lvalue as operand expression
+
+6. Directly convert constant expressions in static declarations according to C specification.
 
 #### Symbol Table
 
@@ -303,6 +313,9 @@ instruction = Return(val)
     | Unary(unary_operator, val src, val dst)
     | Binary(binary_operator, val src1, val src2, val dst)
     | Copy(val src, val dst)
+    | GetAddress(val src, val dst)
+    | Load(val src_ptr, val dst)
+    | Store(val src, val dst_ptr)
     | Jump(identifier target)
     | JumpIfZero(val condition, identifier target)
     | JumpIfNotZero(val condition, identifier target)
@@ -313,6 +326,14 @@ unary_operator = Complement | Negate | Not
 binary_operator = Add | Subtract | Multiply | Divide | Remainder | Equal | NotEqual
     | LessThan | LessOrEqual | GreaterThan | GreaterOrEqual
 ```
+
+**Casts implementation**
+
+Integer casts are implemented directly in tacky. Rules are:
+
+- If target_ty byte size == inner_ty byte size -> Just copy
+- If target_ty byte size < inner_ty byte size -> Truncate
+- If target_ty byte size > inner_ty byte size -> Zero/Sign extend depending on the signedness of the inner_ty
 
 ## ASM Grammar
 ```

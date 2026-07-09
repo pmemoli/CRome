@@ -548,6 +548,20 @@ pub fn process_declarator(declarator: Declarator, base_ty: Type) -> (String, Typ
     }
 }
 
+// <block> ::= "{" { <block-item> } "}"
+pub fn parse_block(tokens: &mut VecDeque<Token>) -> Block {
+    expect(Token::OpenBrace, tokens);
+
+    let mut block_items = Vec::new();
+    while !matches!(peek(tokens), Token::CloseBrace) {
+        let next_block_item = parse_block_item(tokens);
+        block_items.push(next_block_item);
+    }
+    expect(Token::CloseBrace, tokens);
+
+    Block(block_items)
+}
+
 // <block-item> ::= <statement> | <declaration>
 pub fn parse_block_item(tokens: &mut VecDeque<Token>) -> BlockItem {
     match peek(tokens) {

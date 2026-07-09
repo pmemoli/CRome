@@ -28,6 +28,9 @@ pub enum TopLevel {
 //     | Unary(unary_operator, val src, val dst)
 //     | Binary(binary_operator, val src1, val src2, val dst)
 //     | Copy(val src, val dst)
+//     | GetAddress(val src, val dst)
+//     | Load(val src_ptr, val dst)
+//     | Store(val src, val dst_ptr)
 //     | Jump(identifier target)
 //     | JumpIfZero(val condition, identifier target)
 //     | JumpIfNotZero(val condition, identifier target)
@@ -48,6 +51,9 @@ pub enum Instruction {
     Unary(UnaryOperator, Val, Val),
     Binary(BinaryOperator, Val, Val, Val),
     Copy(Val, Val),
+    GetAddress(Val, Val),
+    Load(Val, Val),
+    Store(Val, Val),
     Jump(String),
     JumpIfZero(Val, String),
     JumpIfNotZero(Val, String),
@@ -537,18 +543,18 @@ pub fn ast_expression_to_tacky(
 
             dst
         }
-        parser::Expr::Cast(t, inner, _) => {
+        parser::Expr::Cast(target_ty, inner, _) => {
             let result = ast_expression_to_tacky(inner, instructions, symbol_table, label_idx);
             let inner_type = &get_type(inner);
 
-            if t == inner_type {
+            if target_ty == inner_type {
                 return result;
             };
 
             let dst_name = generate_unique_variable(symbol_table, e_type);
             let dst = Val::Var(dst_name);
 
-            match (t, inner_type) {
+            match (target_ty, inner_type) {
                 // fp conversion conversion
                 (Type::Int | Type::Long, Type::Double | Type::Float) => {
                     instructions.push(Instruction::FloatToInt(result.clone(), dst.clone()))
@@ -570,9 +576,9 @@ pub fn ast_expression_to_tacky(
                 }
                 // integer conversion
                 _ => {
-                    if t.byte_size() == inner_type.byte_size() {
+                    if target_ty.byte_size() == inner_type.byte_size() {
                         instructions.push(Instruction::Copy(result, dst.clone()));
-                    } else if t.byte_size() < inner_type.byte_size() {
+                    } else if target_ty.byte_size() < inner_type.byte_size() {
                         instructions.push(Instruction::Truncate(result, dst.clone()))
                     } else if inner_type.signed() {
                         instructions.push(Instruction::SignExtend(result, dst.clone()))
