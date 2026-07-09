@@ -10,8 +10,8 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS) with it.
 
 Currently in chapter 14 / 20, finished part 1.
 
-- Chapter 14 tacky.
 - Document C specification & implementation better in the README. 
+- Chapter 14 tacky.
 - Refactor instruction fixup, its horrendous
 
 Backlog:
@@ -230,17 +230,55 @@ Check that identifier declarations do not contradict in having or not having lin
 
 1. Annotate the AST with the type of each expression.
 
-2. Cast sub expressions in binary expressions to the common type when needed possible
-    - Specify this properly
+2. Implicitly cast sub expressions in binary expressions to the common type when needed & possible
 
-3. Cast the expression to the declaration/assignment type if possible (convert by assignment)
-    - Specify this properly
+All binary expressions cast their suboperands to the common type except for && and ||.
+
+**common type rules**:
+
+The intuition is to return the largest type of the two operands. The base case is:
+
+- x and y are the same type -> common type is x 
+
+**If x or y is a pointer**:
+    - x is a null integer constant and y is pointer -> common type is y
+
+**If x and y are arithmetic**:
+    - x is a double and y is arithmetic type -> common type is double
+    - x is a float and y is arithmetic type -> common type is float
+    - x is a u/long and y an int -> common type is u/long
+    - x and y are the same type but differ on signedness -> return the unsigned one
+
+Other combinations are invalid
+
+3. Implicitly cast the expression to the declaration/assignment type if possible (convert by assignment)
+
+This is applied on declarations, assignments, return expressions and parameter expressions on function calls:
+
+- type declarator = ... -> target type: derived(type, declarator)
+- left expression = right expression -> target type: left_ty
+- type func... {... return expr} -> target type: func type
+- f(a) and f(type decl) -> target type: derived(type, declarator) 
+
+**valid combinations**:
+
+- same types
+- arithmetic types
+- target pointer and null integer constant
 
 4. Raise error when operating with invalid types (like multiyplying pointers)
-    - Specify this properly
 
-5. Not using an lvalue where one is required (such as the left side of an assignment)
-    - Specify this properly
+- Cast: 
+    - pointer <-> floating is invalid
+
+- Binops:
+    - Divide, Multiply and Remainder don't work with pointers
+    - Remainder doesn't work with floating point expressions 
+
+5. Not using an lvalue where one is required:
+
+- left = right needs left to be an lvalue expression
+- & needs an lvalue as operand expression
 
 #### Symbol Table
 

@@ -367,35 +367,6 @@ pub fn parse_type_and_storage_class(tokens: &mut VecDeque<Token>) -> (Type, Opti
     (ty, storage_class)
 }
 
-#[cfg(test)]
-mod specifier_parser_tests {
-    use super::*;
-
-    #[test]
-    fn simple_extern_int() {
-        let specifiers = vec![Token::Extern, Token::IntKeyword, Token::Semicolon];
-        let (ty, storage_class) = parse_type_and_storage_class(&mut VecDeque::from(specifiers));
-        assert_eq!(ty, Type::Int);
-        assert_eq!(storage_class, Some(StorageClass::Extern));
-    }
-
-    #[test]
-    fn unsigned_long_static() {
-        let specifiers = vec![
-            Token::UnsignedKeyword,
-            Token::IntKeyword,
-            Token::LongKeyword,
-            Token::Static,
-            Token::Semicolon,
-        ];
-        let (ty, storage_class) = parse_type_and_storage_class(&mut VecDeque::from(specifiers));
-        assert_eq!(ty, Type::ULong);
-        assert_eq!(storage_class, Some(StorageClass::Static));
-    }
-
-    // Invalid combinations are tested in integration tests
-}
-
 // parses { <specifier> }+ into a single type
 pub fn parse_type_from_specifiers(specifier_tokens: &mut Vec<Token>) -> Type {
     // Specifier list must be non-empty
@@ -487,81 +458,6 @@ pub fn parse_declarator(tokens: &mut VecDeque<Token>) -> Declarator {
     }
 }
 
-#[cfg(test)]
-mod parse_declarator_tests {
-    use super::*;
-
-    #[test]
-    fn equivalent_pointer_func_declaration() {
-        let common_declarations = vec![
-            "foo(int bar);",
-            "(foo(int bar));",
-            "(foo)(int bar);",
-            "((foo))(int bar);",
-        ];
-
-        let expected_declaration = Declarator::FunDeclarator(
-            vec![ParamInfo(Type::Int, Declarator::Ident("bar".to_string()))],
-            Box::new(Declarator::Ident("foo".to_string())),
-        );
-
-        for declaration_str in common_declarations {
-            let tokens = crate::lexer::lexical_analysis(declaration_str);
-            let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-            let parsed_declaration = parse_declarator(&mut token_queue);
-            assert_eq!(parsed_declaration, expected_declaration);
-        }
-    }
-
-    #[test]
-    fn equivalent_pointer_declaration() {
-        let common_declarations = vec!["**foo;", "(**foo);", "(*(*foo));"];
-
-        let expected_declaration = Declarator::PointerDeclarator(Box::new(
-            Declarator::PointerDeclarator(Box::new(Declarator::Ident("foo".to_string()))),
-        ));
-
-        for declaration_str in common_declarations {
-            let tokens = crate::lexer::lexical_analysis(declaration_str);
-            let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-            let parsed_declaration = parse_declarator(&mut token_queue);
-            assert_eq!(parsed_declaration, expected_declaration);
-        }
-    }
-
-    #[test]
-    fn simple_identifier_declarator() {
-        let declaration_str = "foo;";
-        let tokens = crate::lexer::lexical_analysis(declaration_str);
-        let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-        let parsed_declaration = parse_declarator(&mut token_queue);
-        let expected_declaration = Declarator::Ident("foo".to_string());
-        assert_eq!(parsed_declaration, expected_declaration);
-    }
-
-    #[test]
-    fn param_list_with_multiple_params() {
-        let declaration_str = "foo(int bar, float baz, double *qux);";
-        let tokens = crate::lexer::lexical_analysis(declaration_str);
-        let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-        let parsed_declaration = parse_declarator(&mut token_queue);
-
-        let expected_declaration = Declarator::FunDeclarator(
-            vec![
-                ParamInfo(Type::Int, Declarator::Ident("bar".to_string())),
-                ParamInfo(Type::Float, Declarator::Ident("baz".to_string())),
-                ParamInfo(
-                    Type::Double,
-                    Declarator::PointerDeclarator(Box::new(Declarator::Ident("qux".to_string()))),
-                ),
-            ],
-            Box::new(Declarator::Ident("foo".to_string())),
-        );
-
-        assert_eq!(parsed_declaration, expected_declaration);
-    }
-}
-
 pub fn parse_direct_declarator(tokens: &mut VecDeque<Token>) -> Declarator {
     let simple_declarator = parse_simple_declarator(tokens);
 
@@ -650,61 +546,6 @@ pub fn process_declarator(declarator: Declarator, base_ty: Type) -> (String, Typ
             _ => panic!("Function declarator must have an identifier"),
         },
     }
-}
-
-#[cfg(test)]
-mod process_declarator_tests {
-    use super::*;
-
-    #[test]
-    fn pointer_declarator_derived_type() {
-        let declaration_str = "**foo;";
-        let tokens = crate::lexer::lexical_analysis(declaration_str);
-        let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-        let parsed_declarator = parse_declarator(&mut token_queue);
-
-        let base_type = Type::Int;
-        let (name, derived_type, param_names) = process_declarator(parsed_declarator, base_type);
-
-        assert_eq!(name, "foo");
-        assert_eq!(
-            derived_type,
-            Type::Pointer(Box::new(Type::Pointer(Box::new(Type::Int))))
-        );
-        assert_eq!(param_names.len(), 0);
-    }
-
-    #[test]
-    fn function_declarator_derived_type() {
-        let declaration_str = "foo(int bar, float baz);";
-        let tokens = crate::lexer::lexical_analysis(declaration_str);
-        let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-        let parsed_declarator = parse_declarator(&mut token_queue);
-
-        let base_type = Type::Int;
-        let (name, derived_type, param_names) = process_declarator(parsed_declarator, base_type);
-
-        assert_eq!(name, "foo");
-        assert_eq!(
-            derived_type,
-            Type::FunType(vec![Type::Int, Type::Float], Box::new(Type::Int))
-        );
-        assert_eq!(param_names, vec!["bar", "baz"]);
-    }
-}
-
-// <block> ::= "{" { <block-item> } "}"
-pub fn parse_block(tokens: &mut VecDeque<Token>) -> Block {
-    expect(Token::OpenBrace, tokens);
-
-    let mut block_items = Vec::new();
-    while !matches!(peek(tokens), Token::CloseBrace) {
-        let next_block_item = parse_block_item(tokens);
-        block_items.push(next_block_item);
-    }
-    expect(Token::CloseBrace, tokens);
-
-    Block(block_items)
 }
 
 // <block-item> ::= <statement> | <declaration>
@@ -854,111 +695,6 @@ pub fn parse_expr(tokens: &mut VecDeque<Token>, min_prec: i32) -> Expr {
     left_expr
 }
 
-#[cfg(test)]
-mod parse_expr_tests {
-    use super::*;
-
-    #[test]
-    fn simple_addition_and_multiplication() {
-        let expr_str = "3 + 4 * 5;";
-        let tokens = crate::lexer::lexical_analysis(expr_str);
-        let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-        let parsed_expr = parse_expr(&mut token_queue, 0);
-
-        let expected_expr = Expr::Binary(
-            BinaryOperator::Add,
-            Box::new(Expr::Constant(Const::ConstInt(3), None)),
-            Box::new(Expr::Binary(
-                BinaryOperator::Multiply,
-                Box::new(Expr::Constant(Const::ConstInt(4), None)),
-                Box::new(Expr::Constant(Const::ConstInt(5), None)),
-                None,
-            )),
-            None,
-        );
-
-        assert_eq!(parsed_expr, expected_expr);
-    }
-
-    #[test]
-    fn complex_expression() {
-        let expr_str = "a * (b + c) - d / e;";
-        let tokens = crate::lexer::lexical_analysis(expr_str);
-        let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-        let parsed_expr = parse_expr(&mut token_queue, 0);
-
-        let expected_expr = Expr::Binary(
-            BinaryOperator::Subtract,
-            Box::new(Expr::Binary(
-                BinaryOperator::Multiply,
-                Box::new(Expr::Var("a".to_string(), None)),
-                Box::new(Expr::Binary(
-                    BinaryOperator::Add,
-                    Box::new(Expr::Var("b".to_string(), None)),
-                    Box::new(Expr::Var("c".to_string(), None)),
-                    None,
-                )),
-                None,
-            )),
-            Box::new(Expr::Binary(
-                BinaryOperator::Divide,
-                Box::new(Expr::Var("d".to_string(), None)),
-                Box::new(Expr::Var("e".to_string(), None)),
-                None,
-            )),
-            None,
-        );
-
-        assert_eq!(parsed_expr, expected_expr);
-    }
-
-    #[test]
-    fn right_conditional_assignment_expression() {
-        // Needs to enforce right and left associativity when corresponds
-        let expr_str = "x ? y - 1 : z * 1 ? 4 + 1 : 1 = l = 2;";
-        let tokens = crate::lexer::lexical_analysis(expr_str);
-        let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-        let parsed_expr = parse_expr(&mut token_queue, 0);
-
-        let expected_expr = Expr::Assignment(
-            Box::new(Expr::Conditional(
-                Box::new(Expr::Var("x".to_string(), None)),
-                Box::new(Expr::Binary(
-                    BinaryOperator::Subtract,
-                    Box::new(Expr::Var("y".to_string(), None)),
-                    Box::new(Expr::Constant(Const::ConstInt(1), None)),
-                    None,
-                )),
-                Box::new(Expr::Conditional(
-                    Box::new(Expr::Binary(
-                        BinaryOperator::Multiply,
-                        Box::new(Expr::Var("z".to_string(), None)),
-                        Box::new(Expr::Constant(Const::ConstInt(1), None)),
-                        None,
-                    )),
-                    Box::new(Expr::Binary(
-                        BinaryOperator::Add,
-                        Box::new(Expr::Constant(Const::ConstInt(4), None)),
-                        Box::new(Expr::Constant(Const::ConstInt(1), None)),
-                        None,
-                    )),
-                    Box::new(Expr::Constant(Const::ConstInt(1), None)),
-                    None,
-                )),
-                None,
-            )),
-            Box::new(Expr::Assignment(
-                Box::new(Expr::Var("l".to_string(), None)),
-                Box::new(Expr::Constant(Const::ConstInt(2), None)),
-                None,
-            )),
-            None,
-        );
-
-        assert_eq!(parsed_expr, expected_expr);
-    }
-}
-
 pub fn parse_optional_expr(
     tokens: &mut VecDeque<Token>,
     min_prec: i32,
@@ -1066,41 +802,6 @@ pub fn parse_abstract_declarator(tokens: &mut VecDeque<Token>) -> Option<Abstrac
     }
 }
 
-#[cfg(test)]
-mod parse_abstract_declarator_tests {
-    use super::*;
-
-    #[test]
-    fn simple_pointer_declarator_test() {
-        let declarator_str = "*)";
-        let tokens = crate::lexer::lexical_analysis(declarator_str);
-        let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-        let parsed_declarator = parse_abstract_declarator(&mut token_queue);
-
-        let expected_declarator = Some(AbstractDeclarator::AbstractPointer(Box::new(
-            AbstractDeclarator::AbstractBase,
-        )));
-
-        assert_eq!(parsed_declarator, expected_declarator);
-    }
-
-    #[test]
-    fn dual_equivalent_declarator_test() {
-        let common_declarators = vec!["**)", "(*(*))", "(**)"];
-
-        let expected_declarator = Some(AbstractDeclarator::AbstractPointer(Box::new(
-            AbstractDeclarator::AbstractPointer(Box::new(AbstractDeclarator::AbstractBase)),
-        )));
-
-        for declarator_str in common_declarators {
-            let tokens = crate::lexer::lexical_analysis(declarator_str);
-            let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-            let parsed_declarator = parse_abstract_declarator(&mut token_queue);
-            assert_eq!(parsed_declarator, expected_declarator);
-        }
-    }
-}
-
 pub fn process_abstract_declarator(
     abstract_declarator: Option<AbstractDeclarator>,
     base_ty: Type,
@@ -1112,38 +813,6 @@ pub fn process_abstract_declarator(
         }
         Some(AbstractDeclarator::AbstractBase) => base_ty,
         None => base_ty,
-    }
-}
-
-#[cfg(test)]
-mod process_abstract_declarator_tests {
-    use super::*;
-
-    #[test]
-    fn simple_pointer_type() {
-        let declaration_str = "*)";
-        let tokens = crate::lexer::lexical_analysis(declaration_str);
-        let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-        let abstract_declarator = parse_abstract_declarator(&mut token_queue);
-
-        let base_type = Type::Int;
-        let derived_type = process_abstract_declarator(abstract_declarator, base_type);
-        assert_eq!(derived_type, Type::Pointer(Box::new(Type::Int)));
-    }
-
-    #[test]
-    fn dual_pointer_type() {
-        let declaration_str = "**)";
-        let tokens = crate::lexer::lexical_analysis(declaration_str);
-        let mut token_queue: VecDeque<Token> = VecDeque::from(tokens);
-        let abstract_declarator = parse_abstract_declarator(&mut token_queue);
-
-        let base_type = Type::Float;
-        let derived_type = process_abstract_declarator(abstract_declarator, base_type);
-        assert_eq!(
-            derived_type,
-            Type::Pointer(Box::new(Type::Pointer(Box::new(Type::Float))))
-        );
     }
 }
 

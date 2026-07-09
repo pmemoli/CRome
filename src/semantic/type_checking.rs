@@ -574,7 +574,7 @@ pub fn typecheck_expr(expr: &parser::Expr, symbol_table: &mut SymbolTable) -> pa
                         | parser::BinaryOperator::Divide
                         | parser::BinaryOperator::Remainder => set_type(&new_expr, common_ty),
 
-                        // Comparison operators always return int, but need to be casted to the
+                        //lkal Comparison operators always return int, but need to be casted to the
                         // same type first
                         _ => set_type(&new_expr, Type::Int),
                     }
