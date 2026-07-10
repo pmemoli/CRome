@@ -531,8 +531,8 @@ pub fn tacky_instruction_to_asm(
             let asm_dst_type = tacky_value_type_asm(dst, symbol_table);
 
             vec![
-                Instruction::Mov(AssemblyType::Quadword, asm_ptr, Operand::Reg(Reg::R10)),
-                Instruction::Mov(asm_dst_type, Operand::Memory(Reg::R10, 0), asm_dst),
+                Instruction::Mov(AssemblyType::Quadword, asm_ptr, Operand::Reg(Reg::AX)),
+                Instruction::Mov(asm_dst_type, Operand::Memory(Reg::AX, 0), asm_dst),
             ]
         }
         tacky::Instruction::Store(src, ptr) => {
@@ -542,8 +542,8 @@ pub fn tacky_instruction_to_asm(
             let asm_src_type = tacky_value_type_asm(src, symbol_table);
 
             vec![
-                Instruction::Mov(AssemblyType::Quadword, asm_ptr, Operand::Reg(Reg::R10)),
-                Instruction::Mov(asm_src_type, asm_src, Operand::Memory(Reg::R10, 0)),
+                Instruction::Mov(AssemblyType::Quadword, asm_ptr, Operand::Reg(Reg::AX)),
+                Instruction::Mov(asm_src_type, asm_src, Operand::Memory(Reg::AX, 0)),
             ]
         }
     }
