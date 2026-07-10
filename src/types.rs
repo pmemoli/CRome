@@ -27,7 +27,7 @@ impl Type {
     pub fn signed(&self) -> bool {
         match self {
             Type::Int | Type::Long | Type::Float | Type::Double => true,
-            Type::UInt | Type::ULong => false,
+            Type::UInt | Type::ULong | Type::Pointer(_) => false,
             _ => panic!("Type {:?} does not have a defined signedness", self),
         }
     }

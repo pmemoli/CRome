@@ -24,6 +24,7 @@ pub enum TopLevel {
 // instruction = Mov(assembly_type, operand src, operand dst)
 //     | Movsx(operand src, operand dst)
 //     | MovZeroExtend(operand src, operand dst)
+//     | Lea(operand src, operand dst)
 //     | SFloatToDFloat(operand src, operand dst)
 //     | DFloatToSFloat(operand src, operand dst)
 //     | FloatToInt(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
@@ -48,6 +49,7 @@ pub enum Instruction {
     Mov(AssemblyType, Operand, Operand),
     Movsx(Operand, Operand),
     MovZeroExtend(Operand, Operand),
+    Lea(Operand, Operand),
     SFloatToDFloat(Operand, Operand),
     DFloatToSFloat(Operand, Operand),
     FloatToInt(AssemblyType, AssemblyType, Operand, Operand),
@@ -86,13 +88,13 @@ pub enum BinaryOperator {
     Xor,
 }
 
-// operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int) | Data(identifier)
+// operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Memory(reg, int) | Data(identifier)
 #[derive(Debug, Clone)]
 pub enum Operand {
     Imm(i128),
     Reg(Reg),
     Pseudo(String),
-    Stack(isize),
+    Memory(Reg, isize),
     Data(String),
 }
 
@@ -102,7 +104,7 @@ impl Operand {
     }
 
     pub fn is_memory_operand(&self) -> bool {
-        matches!(self, Operand::Stack(_) | Operand::Data(_))
+        matches!(self, Operand::Memory(_, _) | Operand::Data(_))
     }
 
     pub fn is_large_imm_operand(&self) -> bool {
@@ -134,7 +136,7 @@ pub enum CondCode {
     BE,
 }
 
-// reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11 | SP
+// reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11 | SP | BP
 //     | XMM0 | XMM1 | XMM2 | XMM3 | XMM4 | XMM5 | XMM6 | XMM7 | XMM14 | XMM15
 #[derive(Debug, Clone)]
 pub enum Reg {
@@ -148,6 +150,7 @@ pub enum Reg {
     R10,
     R11,
     SP,
+    BP,
     XMM0,
     XMM1,
     XMM2,

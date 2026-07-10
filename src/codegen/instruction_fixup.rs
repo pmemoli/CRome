@@ -333,6 +333,16 @@ pub fn instruction_fixup_invalid_operands(instruction: &Instruction) -> Vec<Inst
             ]
         }
 
+        // m to r64
+        Instruction::Lea(src, dst) if !dst.is_register_operand() => {
+            let dst_reg = dst_register(&AssemblyType::Quadword);
+
+            vec![
+                Instruction::Lea(src.clone(), dst_reg.clone()),
+                Instruction::Mov(AssemblyType::Quadword, dst_reg, dst.clone()),
+            ]
+        }
+
         i => vec![i.clone()],
     }
 }

@@ -291,6 +291,11 @@ pub fn emission_instruction(
                 panic!("Undefined symbol: {}", label);
             }
         }
+        codegen::Instruction::Lea(src, dst) => {
+            let src_str = emission_operand(src, OperandSize::Qword);
+            let dst_str = emission_operand(dst, OperandSize::Qword);
+            format!("leaq {},{}", src_str, dst_str)
+        }
         _ => panic!("Unexpected instruction type in emission"),
     }
 }
@@ -357,6 +362,7 @@ pub fn emission_register(asm_reg: &codegen::Reg, size: OperandSize) -> String {
 
         // Stack regs
         (codegen::Reg::SP, OperandSize::Qword) => String::from("%rsp"),
+        (codegen::Reg::BP, OperandSize::Qword) => String::from("%rbp"),
 
         _ => panic!(
             "Invalid register and operand size combination: {:?} with size {:?}",
@@ -369,7 +375,14 @@ pub fn emission_operand(asm_operand: &codegen::Operand, size: OperandSize) -> St
     match asm_operand {
         codegen::Operand::Imm(i) => format!("${}", i),
         codegen::Operand::Reg(r) => emission_register(r, size),
-        codegen::Operand::Stack(i) => format!("{}(%rbp)", i),
+        codegen::Operand::Memory(r, i) => {
+            let reg_str = emission_register(r, OperandSize::Qword);
+            if *i == 0 {
+                format!("({})", reg_str)
+            } else {
+                format!("{}({})", i, reg_str)
+            }
+        }
         codegen::Operand::Data(label) => format!("{}(%rip)", label),
         _ => panic!("Unexpected operand type in emission"),
     }

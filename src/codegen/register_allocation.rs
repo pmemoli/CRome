@@ -160,6 +160,11 @@ pub fn resolve_pseudo_registers_instruction(
             let resolved_dst = resolve_pseudo_registers_operand(dst, symbol_table, local_stack);
             Instruction::UIntToFloat(src_ty.clone(), dst_ty.clone(), resolved_src, resolved_dst)
         }
+        Instruction::Lea(src, dst) => {
+            let resolved_src = resolve_pseudo_registers_operand(src, symbol_table, local_stack);
+            let resolved_dst = resolve_pseudo_registers_operand(dst, symbol_table, local_stack);
+            Instruction::Lea(resolved_src, resolved_dst)
+        }
         i => i.clone(),
     }
 }
@@ -181,10 +186,10 @@ pub fn resolve_pseudo_registers_operand(
                 Operand::Data(s.clone())
             } else {
                 match local_stack.get_offset(s) {
-                    Some(offset) => Operand::Stack(-(offset as isize)),
+                    Some(offset) => Operand::Memory(Reg::BP, -(offset as isize)),
                     None => {
                         let offset = local_stack.add(s, ty);
-                        Operand::Stack(-(offset as isize))
+                        Operand::Memory(Reg::BP, -(offset as isize))
                     }
                 }
             }

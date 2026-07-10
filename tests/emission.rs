@@ -35,6 +35,7 @@ valid_tests!(
     ("unsigned_integers", []),
     ("doubles", ["m"]),
     ("floats", ["m"]),
+    ("pointers", ["m"]),
 );
 
 #[cfg(feature = "emission")]

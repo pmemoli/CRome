@@ -143,6 +143,7 @@ pub fn convert_symbols_to_tacky(symbol_table: &mut SymbolTable) -> Vec<TopLevel>
                         Type::ULong => StaticInit::ULongInit(0),
                         Type::Double => StaticInit::DoubleInit(0.),
                         Type::Float => StaticInit::FloatInit(0.),
+                        Type::Pointer(_) => StaticInit::ULongInit(0),
                         Type::FunType(_, _) => {
                             panic!("Function type cannot be used for static variable: {}", name)
                         }
@@ -226,7 +227,7 @@ pub fn ast_block_scope_variable_declaration_to_tacky(
     }
 
     if let Some(e) = init.as_ref() {
-        let value = ast_expression_to_tacky(e, instructions, symbol_table, label_idx);
+        let value = ast_expression_to_tacky_value(e, instructions, symbol_table, label_idx);
         let dst = Val::Var(name.clone());
         instructions.push(Instruction::Copy(value, dst.clone()));
     };
@@ -309,17 +310,17 @@ pub fn ast_statement_to_tacky(
 ) {
     match ast_statement {
         parser::Statement::Return(e) => {
-            let value = ast_expression_to_tacky(e, instructions, symbol_table, label_idx);
+            let value = ast_expression_to_tacky_value(e, instructions, symbol_table, label_idx);
             instructions.push(Instruction::Return(value));
         }
         parser::Statement::Expression(e) => {
-            ast_expression_to_tacky(e, instructions, symbol_table, label_idx);
+            ast_expression_to_tacky_value(e, instructions, symbol_table, label_idx);
         }
         parser::Statement::If(cond_expr, then_stmt, else_stmt) => {
             *label_idx += 1;
             let current_label_idx = *label_idx;
             let cond_result =
-                ast_expression_to_tacky(cond_expr, instructions, symbol_table, label_idx);
+                ast_expression_to_tacky_value(cond_expr, instructions, symbol_table, label_idx);
 
             if let Some(else_stmt) = else_stmt {
                 instructions.push(Instruction::JumpIfZero(
@@ -358,7 +359,7 @@ pub fn ast_statement_to_tacky(
 
             instructions.push(Instruction::Label(continue_label.clone()));
             let cond_result =
-                ast_expression_to_tacky(cond_expr, instructions, symbol_table, label_idx);
+                ast_expression_to_tacky_value(cond_expr, instructions, symbol_table, label_idx);
             instructions.push(Instruction::JumpIfZero(cond_result, break_label.clone()));
             ast_statement_to_tacky(body.as_ref(), instructions, symbol_table, label_idx);
             instructions.push(Instruction::Jump(continue_label));
@@ -375,7 +376,7 @@ pub fn ast_statement_to_tacky(
             ast_statement_to_tacky(body.as_ref(), instructions, symbol_table, label_idx);
             instructions.push(Instruction::Label(continue_label.clone()));
             let cond_result =
-                ast_expression_to_tacky(cond_expr, instructions, symbol_table, label_idx);
+                ast_expression_to_tacky_value(cond_expr, instructions, symbol_table, label_idx);
             instructions.push(Instruction::JumpIfNotZero(cond_result, start_label.clone()));
             instructions.push(Instruction::Label(break_label.clone()));
         }
@@ -390,13 +391,13 @@ pub fn ast_statement_to_tacky(
             instructions.push(Instruction::Label(start_label.clone()));
             if let Some(cond_expr) = cond_expr {
                 let cond_result =
-                    ast_expression_to_tacky(cond_expr, instructions, symbol_table, label_idx);
+                    ast_expression_to_tacky_value(cond_expr, instructions, symbol_table, label_idx);
                 instructions.push(Instruction::JumpIfZero(cond_result, break_label.clone()));
             }
             ast_statement_to_tacky(body.as_ref(), instructions, symbol_table, label_idx);
             instructions.push(Instruction::Label(continue_label.clone()));
             if let Some(post) = post {
-                ast_expression_to_tacky(post, instructions, symbol_table, label_idx);
+                ast_expression_to_tacky_value(post, instructions, symbol_table, label_idx);
             }
             instructions.push(Instruction::Jump(start_label));
             instructions.push(Instruction::Label(break_label));
@@ -405,23 +406,31 @@ pub fn ast_statement_to_tacky(
     }
 }
 
+// exp_result = PlainOperand(val) | DereferencedPointer(val)
+#[derive(Debug, Clone)]
+enum ExprResult {
+    PlainOperand(Val),
+    DereferencedPointer(Val),
+}
+
+// does not lvalue convert expressions
 pub fn ast_expression_to_tacky(
     ast_expr: &parser::Expr,
     instructions: &mut Vec<Instruction>,
     symbol_table: &mut SymbolTable,
     label_idx: &mut usize,
-) -> Val {
+) -> ExprResult {
     let e_type = &get_type(ast_expr);
 
     match ast_expr {
-        parser::Expr::Constant(i, _) => Val::Constant(i.clone()),
+        parser::Expr::Constant(i, _) => ExprResult::PlainOperand(Val::Constant(i.clone())),
         parser::Expr::Unary(op, expr, _) => {
-            let src = ast_expression_to_tacky(expr, instructions, symbol_table, label_idx);
+            let src = ast_expression_to_tacky_value(expr, instructions, symbol_table, label_idx);
             let dst_name = generate_unique_variable(symbol_table, e_type);
             let dst = Val::Var(dst_name);
             let tacky_op = ast_unop_to_tacky(op);
             instructions.push(Instruction::Unary(tacky_op, src, dst.clone()));
-            dst
+            ExprResult::PlainOperand(dst)
         }
         parser::Expr::Binary(op, left_expr, right_expr, _) => match op {
             // Short circuit binary operators
@@ -430,7 +439,7 @@ pub fn ast_expression_to_tacky(
                 let current_label_idx = *label_idx;
 
                 let val_1 =
-                    ast_expression_to_tacky(left_expr, instructions, symbol_table, label_idx);
+                    ast_expression_to_tacky_value(left_expr, instructions, symbol_table, label_idx);
                 if let parser::BinaryOperator::And = op {
                     instructions.push(Instruction::JumpIfZero(
                         val_1,
@@ -443,8 +452,12 @@ pub fn ast_expression_to_tacky(
                     ));
                 }
 
-                let val_2 =
-                    ast_expression_to_tacky(right_expr, instructions, symbol_table, label_idx);
+                let val_2 = ast_expression_to_tacky_value(
+                    right_expr,
+                    instructions,
+                    symbol_table,
+                    label_idx,
+                );
                 instructions.push(Instruction::JumpIfZero(
                     val_2,
                     format!("false_result.{}", current_label_idx),
@@ -471,30 +484,42 @@ pub fn ast_expression_to_tacky(
                     dst.clone(),
                 ));
                 instructions.push(Instruction::Label(format!("end.{}", current_label_idx)));
-                dst
+                ExprResult::PlainOperand(dst)
             }
             _ => {
                 let val_1 =
-                    ast_expression_to_tacky(left_expr, instructions, symbol_table, label_idx);
-                let val_2 =
-                    ast_expression_to_tacky(right_expr, instructions, symbol_table, label_idx);
+                    ast_expression_to_tacky_value(left_expr, instructions, symbol_table, label_idx);
+                let val_2 = ast_expression_to_tacky_value(
+                    right_expr,
+                    instructions,
+                    symbol_table,
+                    label_idx,
+                );
                 let dst_name = generate_unique_variable(symbol_table, e_type);
                 let dst = Val::Var(dst_name);
                 let tacky_op = ast_binop_to_tacky(op);
                 instructions.push(Instruction::Binary(tacky_op, val_1, val_2, dst.clone()));
-                dst
+                ExprResult::PlainOperand(dst)
             }
         },
-        parser::Expr::Var(identifier, _) => Val::Var(identifier.to_string()),
-        parser::Expr::Assignment(left, right, _) => {
-            let parser::Expr::Var(v, _) = left.as_ref() else {
-                panic!("Expected var on left hand side of assignment.")
-            };
+        parser::Expr::Var(identifier, _) => {
+            ExprResult::PlainOperand(Val::Var(identifier.to_string()))
+        }
+        parser::Expr::Assignment(left_expr, right_expr, _) => {
+            let lval = ast_expression_to_tacky(left_expr, instructions, symbol_table, label_idx);
+            let rval =
+                ast_expression_to_tacky_value(right_expr, instructions, symbol_table, label_idx);
 
-            let value = ast_expression_to_tacky(right, instructions, symbol_table, label_idx);
-            let dst = Val::Var(v.clone());
-            instructions.push(Instruction::Copy(value, dst.clone()));
-            dst
+            match lval {
+                ExprResult::PlainOperand(obj) => {
+                    instructions.push(Instruction::Copy(rval, obj.clone()));
+                    ExprResult::PlainOperand(obj)
+                }
+                ExprResult::DereferencedPointer(ptr) => {
+                    instructions.push(Instruction::Store(rval.clone(), ptr));
+                    ExprResult::PlainOperand(rval)
+                }
+            }
         }
         parser::Expr::Conditional(cond_expr, then_expr, else_expr, _) => {
             *label_idx += 1;
@@ -503,29 +528,29 @@ pub fn ast_expression_to_tacky(
             let dst = Val::Var(dst_name);
 
             let cond_value =
-                ast_expression_to_tacky(cond_expr, instructions, symbol_table, label_idx);
+                ast_expression_to_tacky_value(cond_expr, instructions, symbol_table, label_idx);
             instructions.push(Instruction::JumpIfZero(
                 cond_value,
                 format!("else.{}", current_label_idx),
             ));
 
             let then_value =
-                ast_expression_to_tacky(then_expr, instructions, symbol_table, label_idx);
+                ast_expression_to_tacky_value(then_expr, instructions, symbol_table, label_idx);
             instructions.push(Instruction::Copy(then_value, dst.clone()));
             instructions.push(Instruction::Jump(format!("end.{}", current_label_idx)));
 
             instructions.push(Instruction::Label(format!("else.{}", current_label_idx)));
             let else_value =
-                ast_expression_to_tacky(else_expr, instructions, symbol_table, label_idx);
+                ast_expression_to_tacky_value(else_expr, instructions, symbol_table, label_idx);
             instructions.push(Instruction::Copy(else_value, dst.clone()));
 
             instructions.push(Instruction::Label(format!("end.{}", current_label_idx)));
-            dst
+            ExprResult::PlainOperand(dst)
         }
         parser::Expr::FunctionCall(fun_name, args, _) => {
             let mut arg_values = Vec::new();
             for arg in args {
-                arg_values.push(ast_expression_to_tacky(
+                arg_values.push(ast_expression_to_tacky_value(
                     arg,
                     instructions,
                     symbol_table,
@@ -541,14 +566,15 @@ pub fn ast_expression_to_tacky(
                 dst.clone(),
             ));
 
-            dst
+            ExprResult::PlainOperand(dst)
         }
         parser::Expr::Cast(target_ty, inner, _) => {
-            let result = ast_expression_to_tacky(inner, instructions, symbol_table, label_idx);
+            let result =
+                ast_expression_to_tacky_value(inner, instructions, symbol_table, label_idx);
             let inner_type = &get_type(inner);
 
             if target_ty == inner_type {
-                return result;
+                return ExprResult::PlainOperand(result);
             };
 
             let dst_name = generate_unique_variable(symbol_table, e_type);
@@ -574,8 +600,20 @@ pub fn ast_expression_to_tacky(
                 (Type::Double, Type::Float) => {
                     instructions.push(Instruction::SFloatToDFloat(result.clone(), dst.clone()))
                 }
-                // integer conversion
+                // integer/pointer conversion (pointers are treated as if ulong)
                 _ => {
+                    let target_ty = if matches!(target_ty, Type::Pointer(_)) {
+                        Type::ULong
+                    } else {
+                        target_ty.clone()
+                    };
+
+                    let inner_type = if matches!(inner_type, Type::Pointer(_)) {
+                        Type::ULong
+                    } else {
+                        inner_type.clone()
+                    };
+
                     if target_ty.byte_size() == inner_type.byte_size() {
                         instructions.push(Instruction::Copy(result, dst.clone()));
                     } else if target_ty.byte_size() < inner_type.byte_size() {
@@ -588,6 +626,42 @@ pub fn ast_expression_to_tacky(
                 }
             }
 
+            ExprResult::PlainOperand(dst)
+        }
+
+        parser::Expr::Dereference(inner, _) => {
+            let result =
+                ast_expression_to_tacky_value(inner, instructions, symbol_table, label_idx);
+            ExprResult::DereferencedPointer(result)
+        }
+
+        parser::Expr::AddressOf(inner, _) => {
+            let lval = ast_expression_to_tacky(inner, instructions, symbol_table, label_idx);
+            match lval {
+                ExprResult::PlainOperand(obj) => {
+                    let dst_name = generate_unique_variable(symbol_table, e_type);
+                    let dst = Val::Var(dst_name);
+                    instructions.push(Instruction::GetAddress(obj, dst.clone()));
+                    ExprResult::PlainOperand(dst)
+                }
+                ExprResult::DereferencedPointer(ptr) => ExprResult::PlainOperand(ptr),
+            }
+        }
+    }
+}
+
+pub fn ast_expression_to_tacky_value(
+    ast_expr: &parser::Expr,
+    instructions: &mut Vec<Instruction>,
+    symbol_table: &mut SymbolTable,
+    label_idx: &mut usize,
+) -> Val {
+    match ast_expression_to_tacky(ast_expr, instructions, symbol_table, label_idx) {
+        ExprResult::PlainOperand(v) => v,
+        ExprResult::DereferencedPointer(v) => {
+            let dst_name = generate_unique_variable(symbol_table, &get_type(ast_expr));
+            let dst = Val::Var(dst_name);
+            instructions.push(Instruction::Load(v, dst.clone()));
             dst
         }
     }

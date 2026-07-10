@@ -10,14 +10,16 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS) with it.
 
 Currently in chapter 14 / 20, finished part 1.
 
+- Pointer debug.
 - Document C specification & implementation better in the README. 
-- Chapter 14 tacky.
-- Refactor instruction fixup, its horrendous
+- Refactor instruction fixup, its horrendous.
 
 Backlog:
 
+- Work with backend symbol table always in codegen, rather than generate after tacky -> codegen asm
 - Break up parser into multiple files.
 - Proper error reporting, currently it just panics and unwraps everything xdxd
+
 - Bitwise operators
 - Nans
 
@@ -242,13 +244,15 @@ The intuition is to return the largest type of the two operands. The base case i
 - x and y are the same type -> common type is x 
 
 **If x or y is a pointer**:
-    - x is a null integer constant and y is pointer -> common type is y
+
+- x is a null integer constant and y is pointer -> common type is y
 
 **If x and y are arithmetic**:
-    - x is a double and y is arithmetic type -> common type is double
-    - x is a float and y is arithmetic type -> common type is float
-    - x is a u/long and y an int -> common type is u/long
-    - x and y are the same type but differ on signedness -> return the unsigned one
+
+- x is a double and y is arithmetic type -> common type is double
+- x is a float and y is arithmetic type -> common type is float
+- x is a u/long and y an int -> common type is u/long
+- x and y are the same type but differ on signedness -> return the unsigned one
 
 Other combinations are invalid
 
@@ -270,17 +274,21 @@ This is applied on declarations, assignments, return expressions and parameter e
 4. Raise error when operating with invalid types (like multiyplying pointers)
 
 - Cast: 
+
     - pointer <-> floating is invalid
 
 - Binops:
+
     - Divide, Multiply and Remainder don't work with pointers
     - Remainder doesn't work with floating point expressions 
 
 - Unops:
+
     - Negate (-) and complement (~) can't be applied to pointers
     - Complement (~) can't be applied to floats/doubles
 
 - Dereference (*):
+
     - Needs a pointer type.
 
 5. Not using an lvalue where one is required:
@@ -288,7 +296,7 @@ This is applied on declarations, assignments, return expressions and parameter e
 - left = right needs left to be an lvalue expression
 - & needs an lvalue as operand expression
 
-6. Directly convert constant expressions in static declarations according to C specification.
+6. Directly converts constant expressions in static declarations according to C specification.
 
 #### Symbol Table
 
@@ -335,6 +343,8 @@ Integer casts are implemented directly in tacky. Rules are:
 - If target_ty byte size < inner_ty byte size -> Truncate
 - If target_ty byte size > inner_ty byte size -> Zero/Sign extend depending on the signedness of the inner_ty
 
+Pointer to integer casts and viceversa are treated exactly as above, interpreting the pointers as an unsigned long.
+
 ## ASM Grammar
 ```
 program = Program(top_level*)
@@ -345,6 +355,7 @@ top_level = Function(identifier name, bool global, instruction* instructions)
 instruction = Mov(assembly_type, operand src, operand dst)
     | Movsx(operand src, operand dst)
     | MovZeroExtend(operand src, operand dst)
+    | Lea(operand src, operand dst)
     | SFloatToDFloat(operand src, operand dst)
     | DFloatToSFloat(operand src, operand dst)
     | FloatToInt(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
@@ -366,7 +377,7 @@ instruction = Mov(assembly_type, operand src, operand dst)
     | Ret
 unary_operator = Neg | Not | Shr
 binary_operator = Add | Sub | Mult | DivDouble | And | Or | Xor
-operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Stack(int) | Data(identifier)
+operand = Imm(int) | Reg(reg) | Pseudo(identifier) | Memory(reg, int) | Data(identifier)
 cond_code = E | NE | G | GE | L | LE | A | AE | B | BE
 reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11 | SP
     | XMM0 | XMM1 | XMM2 | XMM3 | XMM4 | XMM5 | XMM6 | XMM7 | XMM14 | XMM15
@@ -385,6 +396,7 @@ reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11 | SP
 
 1. Convert Tacky to ASM, without register allocation (using Pseudo(identifier) for all variables).
 2. Copies arguments to pseudo variables at the start of each function, rather than using the corresponding registers/stack.
+3. Implements the System V 64 bit calling ABI.
 
 ### Second pass (Register allocation)
 
@@ -393,7 +405,7 @@ reg = AX | CX | DX | DI | SI | R8 | R9 | R10 | R11 | SP
 
 ### Third pass (Instruction fix up)
 
-1. Fix up instructions so that src and dst operands are not both memory addresses
+1. Fix up instructions so that src and dst operands are compatible with the instruction.
 
 It would be a good idea to list all instruction fixups here... xdxd
 

@@ -142,7 +142,7 @@ pub fn tacky_top_level_to_asm(
                 let arg_asm_type = symbol_type_to_asm_type(arg_type);
                 asm_instructions.push(Instruction::Mov(
                     arg_asm_type,
-                    Operand::Stack(8 * (i + 2) as isize), // First arg is at RSP + 16 (old RBP + ret address)
+                    Operand::Memory(Reg::BP, 8 * (i + 2) as isize), // First arg is at RSP + 16 (old RBP + ret address)
                     Operand::Pseudo(arg),
                 ));
             }
@@ -178,13 +178,6 @@ pub fn tacky_instruction_to_asm(
             let src_asm_op = tacky_val_to_asm_operand(val, symbol_table, static_constant_names);
 
             match ty {
-                t if ty.is_integer() => {
-                    let dst_asm_op = Operand::Reg(Reg::AX);
-                    vec![
-                        Instruction::Mov(val_asm_type, src_asm_op, dst_asm_op),
-                        Instruction::Ret,
-                    ]
-                }
                 t if ty.is_floating_point() => {
                     let dst_asm_op = Operand::Reg(Reg::XMM0);
                     vec![
@@ -192,7 +185,13 @@ pub fn tacky_instruction_to_asm(
                         Instruction::Ret,
                     ]
                 }
-                _ => panic!("Unsupported return type in codegen"),
+                _ => {
+                    let dst_asm_op = Operand::Reg(Reg::AX);
+                    vec![
+                        Instruction::Mov(val_asm_type, src_asm_op, dst_asm_op),
+                        Instruction::Ret,
+                    ]
+                }
             }
         }
 
@@ -205,13 +204,6 @@ pub fn tacky_instruction_to_asm(
             let ty = tacky_value_type(src, symbol_table);
 
             match (unop, ty) {
-                (tacky::UnaryOperator::Not, t) if t.is_integer() => {
-                    vec![
-                        Instruction::Cmp(src_asm_type, Operand::Imm(0), src_asm_op),
-                        Instruction::Mov(dst_asm_type, Operand::Imm(0), dst_asm_op.clone()),
-                        Instruction::SetCC(CondCode::E, dst_asm_op),
-                    ]
-                }
                 (tacky::UnaryOperator::Not, t) if t.is_floating_point() => {
                     let asm_ty = symbol_type_to_asm_type(&t);
                     vec![
@@ -222,6 +214,13 @@ pub fn tacky_instruction_to_asm(
                             Operand::Reg(Reg::XMM14),
                         ),
                         Instruction::Cmp(asm_ty.clone(), src_asm_op, Operand::Reg(Reg::XMM14)),
+                        Instruction::Mov(dst_asm_type, Operand::Imm(0), dst_asm_op.clone()),
+                        Instruction::SetCC(CondCode::E, dst_asm_op),
+                    ]
+                }
+                (tacky::UnaryOperator::Not, _) => {
+                    vec![
+                        Instruction::Cmp(src_asm_type, Operand::Imm(0), src_asm_op),
                         Instruction::Mov(dst_asm_type, Operand::Imm(0), dst_asm_op.clone()),
                         Instruction::SetCC(CondCode::E, dst_asm_op),
                     ]
@@ -249,13 +248,12 @@ pub fn tacky_instruction_to_asm(
                         ),
                     ]
                 }
-                (tacky::UnaryOperator::Negate, t) if t.is_integer() => {
+                (tacky::UnaryOperator::Negate, _) => {
                     vec![
                         Instruction::Mov(src_asm_type.clone(), src_asm_op, dst_asm_op.clone()),
                         Instruction::Unary(UnaryOperator::Neg, src_asm_type, dst_asm_op),
                     ]
                 }
-                _ => panic!("Unsupported unary operator/type combination in codegen"),
             }
         }
         tacky::Instruction::Binary(op, src_a, src_b, dst) => {
@@ -345,7 +343,7 @@ pub fn tacky_instruction_to_asm(
                     | tacky::BinaryOperator::GreaterThan
                     | tacky::BinaryOperator::GreaterOrEqual,
                     ty,
-                ) if ty.is_integer() || ty.is_floating_point() => {
+                ) => {
                     let cond_code = if ty.signed() && ty.is_integer() {
                         tacky_binop_to_cond_asm(op)
                     } else {
@@ -520,6 +518,34 @@ pub fn tacky_instruction_to_asm(
                 asm_dst,
             )]
         }
+        tacky::Instruction::GetAddress(src, dst) => {
+            let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+            let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
+
+            vec![Instruction::Lea(asm_src, asm_dst)]
+        }
+        tacky::Instruction::Load(ptr, dst) => {
+            let asm_ptr = tacky_val_to_asm_operand(ptr, symbol_table, static_constant_names);
+            let asm_dst = tacky_val_to_asm_operand(dst, symbol_table, static_constant_names);
+
+            let asm_dst_type = tacky_value_type_asm(dst, symbol_table);
+
+            vec![
+                Instruction::Mov(AssemblyType::Quadword, asm_ptr, Operand::Reg(Reg::R10)),
+                Instruction::Mov(asm_dst_type, Operand::Memory(Reg::R10, 0), asm_dst),
+            ]
+        }
+        tacky::Instruction::Store(src, ptr) => {
+            let asm_ptr = tacky_val_to_asm_operand(ptr, symbol_table, static_constant_names);
+            let asm_src = tacky_val_to_asm_operand(src, symbol_table, static_constant_names);
+
+            let asm_src_type = tacky_value_type_asm(src, symbol_table);
+
+            vec![
+                Instruction::Mov(AssemblyType::Quadword, asm_ptr, Operand::Reg(Reg::R10)),
+                Instruction::Mov(asm_src_type, asm_src, Operand::Memory(Reg::R10, 0)),
+            ]
+        }
     }
 }
 
@@ -608,7 +634,7 @@ pub fn tacky_fun_call_to_asm(
             Operand::Imm(_) | Operand::Reg(_) => {
                 instructions.push(Instruction::Push(asm_arg));
             }
-            Operand::Pseudo(_) | Operand::Stack(_) | Operand::Data(_) => {
+            Operand::Pseudo(_) | Operand::Memory(_, _) | Operand::Data(_) => {
                 let asm_arg_type = tacky_value_type_asm(arg, symbol_table);
                 let mov_type = match asm_arg_type {
                     AssemblyType::Longword | AssemblyType::Float => AssemblyType::Longword,
@@ -779,6 +805,7 @@ pub fn symbol_type_to_asm_type(tacky_type: &Type) -> AssemblyType {
         Type::ULong => AssemblyType::Quadword,
         Type::Double => AssemblyType::Double,
         Type::Float => AssemblyType::Float,
+        Type::Pointer(_) => AssemblyType::Quadword,
         _ => panic!("Unsupported type for assembly codegen"),
     }
 }

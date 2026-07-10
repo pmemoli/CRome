@@ -67,6 +67,7 @@ impl BackendSymbolTable {
                         Type::UInt => AssemblyType::Longword,
                         Type::Long => AssemblyType::Quadword,
                         Type::ULong => AssemblyType::Quadword,
+                        Type::Pointer(_) => AssemblyType::Quadword,
                         Type::Double => AssemblyType::Double,
                         Type::Float => AssemblyType::Float,
                         Type::FunType(_, _) => panic!("Functions should not be treated as objects"),
