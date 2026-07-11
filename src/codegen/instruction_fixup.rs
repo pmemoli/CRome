@@ -26,6 +26,7 @@ pub fn instruction_fixup_top_level(top_level: &TopLevel) -> TopLevel {
 }
 
 // Very weird logic, not modular and doesn't scale at all
+// Fixups have a very regular pattern...
 pub fn instruction_fixup(instruction: &Instruction) -> Vec<Instruction> {
     instruction_fixup_large_imm(instruction)
         .iter()

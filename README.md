@@ -8,9 +8,9 @@ The final goal is writing and compiling a simple xv6-like OS (RomeOS) with it.
 
 ## TODO
 
-Currently in chapter 14 / 20, finished part 1.
+Currently in chapter 15 / 20, finished part 1.
 
-- Pointer debug.
+- Arrays and pointer arithmetic.
 - Document C specification & implementation better in the README. 
 - Refactor instruction fixup, its horrendous.
 

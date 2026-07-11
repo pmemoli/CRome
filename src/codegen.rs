@@ -21,7 +21,7 @@ pub enum TopLevel {
     StaticConstant(String, usize, StaticInit),
 }
 
-// instruction = Mov(assembly_type, operand src, operand dst)
+// instruction = Mov(dst_assembly_type, operand src, operand dst)
 //     | Movsx(operand src, operand dst)
 //     | MovZeroExtend(operand src, operand dst)
 //     | Lea(operand src, operand dst)
@@ -33,7 +33,7 @@ pub enum TopLevel {
 //     | UIntToFloat(assembly_type src_type, assembly_type dst_type, operand src, operand dst)
 //     | Unary(unary_operator, assembly_type, operand)
 //     | Binary(binary_operator, assembly_type, operand, operand)
-//     | Cmp(assembly_type, operand, operand)
+//     | Cmp(both_assembly_type, operand, operand)
 //     | Idiv(assembly_type, operand)
 //     | Div(assembly_type, operand)
 //     | Cdq(assembly_type)
