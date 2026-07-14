@@ -31,11 +31,15 @@ Backlog:
 ```
 program = Program(declaration*)
 declaration = FunDecl(function_declaration) | VarDecl(variable_declaration)
-variable_declaration = (identifier name, exp? init, type var_type, storage_class?)
-function_declaration = (identifier name, identifier* params, block? body, type fun_type, storage_class?)
+variable_declaration = (identifier name, initializer? init,
+                        type var_type, storage_class?)
+function_declaration = (identifier name, identifier* params, block? body,
+                        type fun_type, storage_class?)
+initializer = SingleInit(exp) | CompoundInit(initializer*)
 type = Int | Long | UInt | ULong | Double
     | FunType(type* params, type ret)
     | Pointer(type referenced)
+    | Array(type element, int size)
 storage_class = Static | Extern
 block = Block(block_item*)
 block_item = S(statement) | D(declaration)
@@ -60,6 +64,7 @@ exp = Constant(const)
     | FunctionCall(identifier, exp* args)
     | Dereference(exp)
     | AddrOf(exp)
+    | Subscript(exp, exp)
 unary_operator = Complement | Negate | Not
 binary_operator = Add | Subtract | Multiply | Divide | Remainder | And | Or
     | Equal | NotEqual | LessThan | LessOrEqual

@@ -1,3 +1,4 @@
+use anyhow::{Result, bail};
 use ordered_float::OrderedFloat;
 
 use crate::lexer::Token;
@@ -36,6 +37,12 @@ pub struct VariableDeclaration(
     pub Type,
     pub Option<StorageClass>,
 );
+
+// initializer = SingleInit(exp) | CompoundInit(initializer*)
+pub enum Initializer {
+    SingleInit(Expr),
+    CompoundInit(Box<Initializer>),
+}
 
 // storage_class = Static | Extern
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,8 +122,9 @@ pub enum Expr {
     Assignment(Box<Expr>, Box<Expr>, Option<Type>),
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>, Option<Type>),
     FunctionCall(String, Vec<Expr>, Option<Type>),
-    Dereference(Box<Expr>, Option<Type>), // *
-    AddressOf(Box<Expr>, Option<Type>),   // &
+    Dereference(Box<Expr>, Option<Type>),          // *
+    AddressOf(Box<Expr>, Option<Type>),            // &
+    Subscript(Box<Expr>, Box<Expr>, Option<Type>), // x[]
 }
 
 impl Expr {
@@ -434,7 +442,8 @@ pub fn parse_storage_class_from_specifiers(
 }
 
 // <declarator> ::= "*" <declarator> | <direct-declarator>
-// <direct-declarator> ::= <simple-declarator> [ <param-list> ]
+// <direct-declarator> ::= <simple-declarator> [ <declarator-suffix> ]
+// <declarator-suffix> ::= <param-list> | { "[" <const> "]" }+
 // <param-list> ::= "(" "void" ")" | "(" <param> { "," <param> } ")"
 // <param> ::= { <type-specifier> }+ <declarator>
 // <simple-declarator> ::= <identifier> | "(" <declarator> ")"
@@ -442,6 +451,7 @@ pub fn parse_storage_class_from_specifiers(
 enum Declarator {
     Ident(String),
     PointerDeclarator(Box<Declarator>),
+    ArrayDeclarator(Box<Declarator>, usize),
     FunDeclarator(Vec<ParamInfo>, Box<Declarator>),
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -467,6 +477,23 @@ pub fn parse_direct_declarator(tokens: &mut VecDeque<Token>) -> Declarator {
             let params = parse_param_list(tokens);
             expect(Token::CloseParenthesis, tokens);
             Declarator::FunDeclarator(params, Box::new(simple_declarator))
+        }
+        Token::OpenBracket => {
+            let mut array_declarator = simple_declarator;
+
+            while matches!(peek(tokens), Token::OpenBracket) {
+                take_token(tokens);
+                let constant = parse_constant(tokens);
+                if let Ok(size) = constant_usize_value(&constant) {
+                    array_declarator =
+                        Declarator::ArrayDeclarator(Box::new(array_declarator), size);
+                } else {
+                    panic!("Syntax Error: Array size must be an integer constant");
+                }
+                expect(Token::CloseBracket, tokens);
+            }
+
+            array_declarator
         }
         _ => simple_declarator,
     }
@@ -931,4 +958,17 @@ pub fn parse_identifier(tokens: &mut VecDeque<Token>) -> String {
     };
 
     s.to_string()
+}
+
+pub fn constant_usize_value(cons: &Const) -> Result<usize> {
+    match cons {
+        Const::ConstInt(i) => Ok(*i as usize),
+        Const::ConstUInt(u) => Ok(*u as usize),
+        Const::ConstLong(l) => Ok(*l as usize),
+        Const::ConstULong(ul) => Ok(*ul as usize),
+        _ => bail!(
+            "Syntax Error: Expected an integer constant but found {:?}",
+            cons
+        ),
+    }
 }

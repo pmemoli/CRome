@@ -10,6 +10,7 @@ pub enum Type {
     Float,
     Double,
     Pointer(Box<Type>),
+    Array(Box<Type>, usize),       // (element_type, length)
     FunType(Vec<Type>, Box<Type>), // (param_types, return_type)
 }
 
